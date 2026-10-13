@@ -32,3 +32,19 @@ test "stress export rejects partial histories" {
   ]).unwrap()
   assert_true(@app.stress_csv(separated) is Err(_))
 }
+
+///|
+test "publicly constructed history cannot disguise a partial export" {
+  let p : @app.JointProfile = {
+    bolt_stiffness_n_per_mm: 200000.0,
+    joint_stiffness_n_per_mm: 800000.0,
+    preload_n: 10000.0,
+    stress_area_mm2: 50.0,
+  }
+  let valid = @app.analyze_load_history(p, [
+    { time_s: 0.0, force_n: 0.0, },
+    { time_s: 1.0, force_n: 5000.0, },
+  ]).unwrap()
+  let partial = { ..valid, samples: valid.samples[:1].to_owned(), }
+  assert_true(@app.stress_csv(partial) is Err(@app.InvalidInput(_)))
+}

@@ -59,6 +59,29 @@ pub fn stress_csv(history : HistoryResult) -> Result[String, JointError] {
   if history.separation is Some(event) {
     return Err(SeparationReached(event.force_n, event.separation_force_n))
   }
+  if history.input_samples <= 0 ||
+    history.samples.length() != history.input_samples {
+    return Err(InvalidInput("stress export requires every input sample"))
+  }
+  if !finite(history.load_fraction) ||
+    history.load_fraction <= 0.0 ||
+    history.load_fraction >= 1.0 ||
+    !finite(history.separation_force_n) ||
+    history.separation_force_n <= 0.0 {
+    return Err(InvalidInput("invalid history model parameters"))
+  }
+  for i, sample in history.samples {
+    if !finite(sample.time_s) ||
+      !finite(sample.stress_mpa) ||
+      sample.stress_mpa <= 0.0 ||
+      !finite(sample.clamp_force_n) ||
+      sample.clamp_force_n <= 0.0 {
+      return Err(InvalidInput("sample \{i}: invalid clamped stress sample"))
+    }
+    if i > 0 && sample.time_s <= history.samples[i - 1].time_s {
+      return Err(InvalidInput("sample \{i}: timestamps must strictly increase"))
+    }
+  }
   let output = StringBuilder()
   output.write_string("time_s,stress_mpa\n")
   for sample in history.samples {
