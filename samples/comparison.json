@@ -1,0 +1,341 @@
+{
+  "command": "python scripts/compare_joints.py --fatigue ../fatigue-spectrum",
+  "data_source": "samples/loads.csv: synthetic illustrative loads, not measured equipment data",
+  "sn_source": "fatigue-spectrum/samples/sn.json: illustrative N=1e10/amplitude^4, not certified material data",
+  "sn_points": [
+    {
+      "amplitude_mpa": 1,
+      "cycles_to_failure": 10000000000
+    },
+    {
+      "amplitude_mpa": 10,
+      "cycles_to_failure": 1000000
+    },
+    {
+      "amplitude_mpa": 100,
+      "cycles_to_failure": 100
+    }
+  ],
+  "mean_stress_model": "none",
+  "interpretation": "Compare the linear joint response and uncorrected Miner model only; this is not a measured fatigue-life result.",
+  "cases": {
+    "stiff_joint": {
+      "profile": {
+        "bolt_stiffness_n_per_mm": 200000,
+        "joint_stiffness_n_per_mm": 800000,
+        "preload_n": 10000,
+        "stress_area_mm2": 50
+      },
+      "load_fraction": 0.2,
+      "separation_force_n": 12500,
+      "minimum_clamp_force_n": 3600,
+      "maximum_stress_mpa": 232,
+      "stress_samples": [
+        {
+          "time_s": 0,
+          "stress_mpa": 200,
+          "clamp_force_n": 10000
+        },
+        {
+          "time_s": 1,
+          "stress_mpa": 216,
+          "clamp_force_n": 6800
+        },
+        {
+          "time_s": 2,
+          "stress_mpa": 204,
+          "clamp_force_n": 9200
+        },
+        {
+          "time_s": 3,
+          "stress_mpa": 232,
+          "clamp_force_n": 3600
+        },
+        {
+          "time_s": 4,
+          "stress_mpa": 208,
+          "clamp_force_n": 8400
+        },
+        {
+          "time_s": 5,
+          "stress_mpa": 224,
+          "clamp_force_n": 5200
+        },
+        {
+          "time_s": 6,
+          "stress_mpa": 200,
+          "clamp_force_n": 10000
+        },
+        {
+          "time_s": 7,
+          "stress_mpa": 216,
+          "clamp_force_n": 6800
+        },
+        {
+          "time_s": 8,
+          "stress_mpa": 200,
+          "clamp_force_n": 10000
+        }
+      ],
+      "cycles": [
+        {
+          "range_mpa": 12,
+          "mean_mpa": 210,
+          "count": 1,
+          "start_index": 1,
+          "end_index": 2
+        },
+        {
+          "range_mpa": 16,
+          "mean_mpa": 216,
+          "count": 1,
+          "start_index": 4,
+          "end_index": 5
+        },
+        {
+          "range_mpa": 32,
+          "mean_mpa": 216,
+          "count": 0.5,
+          "start_index": 0,
+          "end_index": 3
+        },
+        {
+          "range_mpa": 16,
+          "mean_mpa": 208,
+          "count": 1,
+          "start_index": 6,
+          "end_index": 7
+        },
+        {
+          "range_mpa": 32,
+          "mean_mpa": 216,
+          "count": 0.5,
+          "start_index": 3,
+          "end_index": 8
+        }
+      ],
+      "spectrum": [
+        {
+          "lower_range_mpa": 10,
+          "upper_range_mpa": 20,
+          "count": 3
+        },
+        {
+          "lower_range_mpa": 30,
+          "upper_range_mpa": 40,
+          "count": 1
+        }
+      ],
+      "damage": {
+        "total_damage": 7.502400000000237e-06,
+        "evaluated_damage": 7.502400000000237e-06,
+        "out_of_range_cycles": [],
+        "mean_stress_model": "none",
+        "contributions": [
+          {
+            "cycle_index": 0,
+            "amplitude_mpa": 6,
+            "mean_mpa": 210,
+            "count": 1,
+            "allowable_cycles": 7716049.382715396,
+            "damage": 1.2960000000001098e-07
+          },
+          {
+            "cycle_index": 1,
+            "amplitude_mpa": 8,
+            "mean_mpa": 216,
+            "count": 1,
+            "allowable_cycles": 2441406.2499997597,
+            "damage": 4.096000000000403e-07
+          },
+          {
+            "cycle_index": 2,
+            "amplitude_mpa": 16,
+            "mean_mpa": 216,
+            "count": 0.5,
+            "allowable_cycles": 152587.8906249966,
+            "damage": 3.276800000000073e-06
+          },
+          {
+            "cycle_index": 3,
+            "amplitude_mpa": 8,
+            "mean_mpa": 208,
+            "count": 1,
+            "allowable_cycles": 2441406.2499997597,
+            "damage": 4.096000000000403e-07
+          },
+          {
+            "cycle_index": 4,
+            "amplitude_mpa": 16,
+            "mean_mpa": 216,
+            "count": 0.5,
+            "allowable_cycles": 152587.8906249966,
+            "damage": 3.276800000000073e-06
+          }
+        ]
+      }
+    },
+    "soft_joint": {
+      "profile": {
+        "bolt_stiffness_n_per_mm": 200000,
+        "joint_stiffness_n_per_mm": 300000,
+        "preload_n": 10000,
+        "stress_area_mm2": 50
+      },
+      "load_fraction": 0.4,
+      "separation_force_n": 16666.666666666668,
+      "minimum_clamp_force_n": 5200,
+      "maximum_stress_mpa": 264,
+      "stress_samples": [
+        {
+          "time_s": 0,
+          "stress_mpa": 200,
+          "clamp_force_n": 10000
+        },
+        {
+          "time_s": 1,
+          "stress_mpa": 232,
+          "clamp_force_n": 7600
+        },
+        {
+          "time_s": 2,
+          "stress_mpa": 208,
+          "clamp_force_n": 9400
+        },
+        {
+          "time_s": 3,
+          "stress_mpa": 264,
+          "clamp_force_n": 5200
+        },
+        {
+          "time_s": 4,
+          "stress_mpa": 216,
+          "clamp_force_n": 8800
+        },
+        {
+          "time_s": 5,
+          "stress_mpa": 248,
+          "clamp_force_n": 6400
+        },
+        {
+          "time_s": 6,
+          "stress_mpa": 200,
+          "clamp_force_n": 10000
+        },
+        {
+          "time_s": 7,
+          "stress_mpa": 232,
+          "clamp_force_n": 7600
+        },
+        {
+          "time_s": 8,
+          "stress_mpa": 200,
+          "clamp_force_n": 10000
+        }
+      ],
+      "cycles": [
+        {
+          "range_mpa": 24,
+          "mean_mpa": 220,
+          "count": 1,
+          "start_index": 1,
+          "end_index": 2
+        },
+        {
+          "range_mpa": 32,
+          "mean_mpa": 232,
+          "count": 1,
+          "start_index": 4,
+          "end_index": 5
+        },
+        {
+          "range_mpa": 64,
+          "mean_mpa": 232,
+          "count": 0.5,
+          "start_index": 0,
+          "end_index": 3
+        },
+        {
+          "range_mpa": 32,
+          "mean_mpa": 216,
+          "count": 1,
+          "start_index": 6,
+          "end_index": 7
+        },
+        {
+          "range_mpa": 64,
+          "mean_mpa": 232,
+          "count": 0.5,
+          "start_index": 3,
+          "end_index": 8
+        }
+      ],
+      "spectrum": [
+        {
+          "lower_range_mpa": 20,
+          "upper_range_mpa": 30,
+          "count": 1
+        },
+        {
+          "lower_range_mpa": 30,
+          "upper_range_mpa": 40,
+          "count": 2
+        },
+        {
+          "lower_range_mpa": 60,
+          "upper_range_mpa": 70,
+          "count": 1
+        }
+      ],
+      "damage": {
+        "total_damage": 0.00012003840000000623,
+        "evaluated_damage": 0.00012003840000000623,
+        "out_of_range_cycles": [],
+        "mean_stress_model": "none",
+        "contributions": [
+          {
+            "cycle_index": 0,
+            "amplitude_mpa": 12,
+            "mean_mpa": 220,
+            "count": 1,
+            "allowable_cycles": 482253.0864197489,
+            "damage": 2.073600000000018e-06
+          },
+          {
+            "cycle_index": 1,
+            "amplitude_mpa": 16,
+            "mean_mpa": 232,
+            "count": 1,
+            "allowable_cycles": 152587.8906249966,
+            "damage": 6.553600000000146e-06
+          },
+          {
+            "cycle_index": 2,
+            "amplitude_mpa": 32,
+            "mean_mpa": 232,
+            "count": 0.5,
+            "allowable_cycles": 9536.743164061962,
+            "damage": 5.242880000000296e-05
+          },
+          {
+            "cycle_index": 3,
+            "amplitude_mpa": 16,
+            "mean_mpa": 216,
+            "count": 1,
+            "allowable_cycles": 152587.8906249966,
+            "damage": 6.553600000000146e-06
+          },
+          {
+            "cycle_index": 4,
+            "amplitude_mpa": 32,
+            "mean_mpa": 232,
+            "count": 0.5,
+            "allowable_cycles": 9536.743164061962,
+            "damage": 5.242880000000296e-05
+          }
+        ]
+      }
+    }
+  },
+  "soft_to_stiff_damage_ratio": 16.000000000000327
+}

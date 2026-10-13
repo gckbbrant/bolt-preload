@@ -1,0 +1,21 @@
+name: Tests
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s latest
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Check and test the library
+        run: |
+          moon version --all
+          moon check --target native
+          moon test --target native
+          moon test --target js
+      - name: Test the native command line
+        run: python3 tests/test_cli.py
