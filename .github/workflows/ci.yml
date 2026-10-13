@@ -20,3 +20,12 @@ jobs:
           moon test --target js
       - name: Test the native command line
         run: python3 tests/test_cli.py
+      - name: Checkout fatigue-spectrum for the paired example
+        uses: actions/checkout@v5
+        with:
+          repository: gckbbrant/fatigue-spectrum
+          path: _build/fatigue-spectrum
+      - name: Run the paired stiffness example
+        run: |
+          (cd _build/fatigue-spectrum && moon update)
+          python3 scripts/compare_joints.py --fatigue _build/fatigue-spectrum --output _build/comparison.json

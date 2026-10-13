@@ -4,15 +4,17 @@ No Python dependencies. Requires the sibling fatigue-spectrum project and moon.
 """
 import argparse
 import json
-import platform
 import subprocess
 from pathlib import Path
 
 
 def executable(root):
     subprocess.run(["moon", "build", "--target", "native"], cwd=root, check=True)
-    binary = root / "_build/native/debug/build/cmd/main/main"
-    return binary.with_suffix(".exe") if platform.system() == "Windows" else binary
+    base = root / "_build/native/debug/build/cmd/main/main"
+    for binary in (base.with_suffix(".exe"), base):
+        if binary.is_file():
+            return binary
+    raise FileNotFoundError("moon build produced no native CLI at " + str(base))
 
 
 def run(binary, root, *args):
