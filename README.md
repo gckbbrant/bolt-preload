@@ -9,6 +9,7 @@
 在项目目录运行：
 
 ```sh
+moon update
 moon run --target native cmd/main -- analyze samples/joint.json --force 5000 --json _build/static.json --svg _build/joint.svg
 moon run --target native cmd/main -- history samples/joint.json samples/loads.csv --stress _build/stress.csv --json _build/history.json
 ```
