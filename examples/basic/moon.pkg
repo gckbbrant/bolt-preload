@@ -1,0 +1,7 @@
+import {
+  "gckbbrant/bolt-preload" @joint,
+}
+
+pkgtype(kind: "executable")
+
+supported_targets = "+native+js"

@@ -127,8 +127,8 @@
         }
       ],
       "damage": {
-        "total_damage": 7.502400000000237e-06,
-        "evaluated_damage": 7.502400000000237e-06,
+        "total_damage": 7.5023999999999944e-06,
+        "evaluated_damage": 7.5023999999999944e-06,
         "out_of_range_cycles": [],
         "mean_stress_model": "none",
         "contributions": [
@@ -137,40 +137,40 @@
             "amplitude_mpa": 6,
             "mean_mpa": 210,
             "count": 1,
-            "allowable_cycles": 7716049.382715396,
-            "damage": 1.2960000000001098e-07
+            "allowable_cycles": 7716049.382716054,
+            "damage": 1.2959999999999992e-07
           },
           {
             "cycle_index": 1,
             "amplitude_mpa": 8,
             "mean_mpa": 216,
             "count": 1,
-            "allowable_cycles": 2441406.2499997597,
-            "damage": 4.096000000000403e-07
+            "allowable_cycles": 2441406.250000003,
+            "damage": 4.0959999999999954e-07
           },
           {
             "cycle_index": 2,
             "amplitude_mpa": 16,
             "mean_mpa": 216,
             "count": 0.5,
-            "allowable_cycles": 152587.8906249966,
-            "damage": 3.276800000000073e-06
+            "allowable_cycles": 152587.89062500012,
+            "damage": 3.2767999999999976e-06
           },
           {
             "cycle_index": 3,
             "amplitude_mpa": 8,
             "mean_mpa": 208,
             "count": 1,
-            "allowable_cycles": 2441406.2499997597,
-            "damage": 4.096000000000403e-07
+            "allowable_cycles": 2441406.250000003,
+            "damage": 4.0959999999999954e-07
           },
           {
             "cycle_index": 4,
             "amplitude_mpa": 16,
             "mean_mpa": 216,
             "count": 0.5,
-            "allowable_cycles": 152587.8906249966,
-            "damage": 3.276800000000073e-06
+            "allowable_cycles": 152587.89062500012,
+            "damage": 3.2767999999999976e-06
           }
         ]
       }
@@ -288,8 +288,8 @@
         }
       ],
       "damage": {
-        "total_damage": 0.00012003840000000623,
-        "evaluated_damage": 0.00012003840000000623,
+        "total_damage": 0.00012003839999999975,
+        "evaluated_damage": 0.00012003839999999975,
         "out_of_range_cycles": [],
         "mean_stress_model": "none",
         "contributions": [
@@ -298,44 +298,44 @@
             "amplitude_mpa": 12,
             "mean_mpa": 220,
             "count": 1,
-            "allowable_cycles": 482253.0864197489,
-            "damage": 2.073600000000018e-06
+            "allowable_cycles": 482253.0864197532,
+            "damage": 2.0735999999999995e-06
           },
           {
             "cycle_index": 1,
             "amplitude_mpa": 16,
             "mean_mpa": 232,
             "count": 1,
-            "allowable_cycles": 152587.8906249966,
-            "damage": 6.553600000000146e-06
+            "allowable_cycles": 152587.89062500012,
+            "damage": 6.553599999999995e-06
           },
           {
             "cycle_index": 2,
             "amplitude_mpa": 32,
             "mean_mpa": 232,
             "count": 0.5,
-            "allowable_cycles": 9536.743164061962,
-            "damage": 5.242880000000296e-05
+            "allowable_cycles": 9536.743164062522,
+            "damage": 5.242879999999988e-05
           },
           {
             "cycle_index": 3,
             "amplitude_mpa": 16,
             "mean_mpa": 216,
             "count": 1,
-            "allowable_cycles": 152587.8906249966,
-            "damage": 6.553600000000146e-06
+            "allowable_cycles": 152587.89062500012,
+            "damage": 6.553599999999995e-06
           },
           {
             "cycle_index": 4,
             "amplitude_mpa": 32,
             "mean_mpa": 232,
             "count": 0.5,
-            "allowable_cycles": 9536.743164061962,
-            "damage": 5.242880000000296e-05
+            "allowable_cycles": 9536.743164062522,
+            "damage": 5.242879999999988e-05
           }
         ]
       }
     }
   },
-  "soft_to_stiff_damage_ratio": 16.000000000000327
+  "soft_to_stiff_damage_ratio": 15.999999999999979
 }
