@@ -3,6 +3,6 @@
 <rect width="780" height="410" fill="#f7f8fa"/><g font-family="sans-serif" fill="#263449">
 <text x="60" y="32" font-size="22">bolt-preload · axial joint</text><text x="60" y="53" font-size="12">C = 0.2; preload = 10000 N</text>
 <path d="M70 65V310H680" fill="none" stroke="#758299"/><path d="M70 114 L650 65" fill="none" stroke="#2563eb" stroke-width="3"/><path d="M70 114 L650 310" fill="none" stroke="#15803d" stroke-width="3"/>
-<path d="M650 65V310" stroke="#c2410c" stroke-dasharray="5 4"/><text x="75" y="83" font-size="13">Bolt force (N)</text><text x="400" y="283" fill="#15803d" font-size="13">Remaining clamp force (N)</text>
+<path d="M650 65V310" stroke="#c2410c" stroke-dasharray="5 4"/><text x="75" y="83" font-size="13">Bolt force (N)</text><text x="110" y="269" fill="#15803d" font-size="13">Remaining clamp force (N)</text>
 <text x="70" y="330" font-size="12">0</text><text x="440" y="348" font-size="13">Separation: 12500 N</text><text x="250" y="369" font-size="13">External tensile force (N)</text><text x="60" y="394" font-size="12">At separation the clamped model stops; this chart does not extrapolate bolt stress.</text>
 </g></svg>
