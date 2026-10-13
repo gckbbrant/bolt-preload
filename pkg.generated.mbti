@@ -1,0 +1,87 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "gckbbrant/bolt-preload"
+
+import {
+  "moonbitlang/core/debug",
+  "moonbitlang/core/json",
+}
+
+// Values
+pub fn analyze_joint(JointProfile, Double) -> Result[JointResult, JointError]
+
+pub fn analyze_load_history(JointProfile, ArrayView[LoadSample]) -> Result[HistoryResult, JointError]
+
+// Errors
+
+// Types and methods
+pub(all) struct HistoryResult {
+  load_fraction : Double
+  separation_force_n : Double
+  input_samples : Int
+  samples : Array[StressSample]
+  separation : Separation?
+} derive(ToJson, @debug.Debug)
+pub fn HistoryResult::to_json(Self) -> Json
+pub fn HistoryResult::to_repr(Self) -> @debug.Repr
+
+pub(all) enum JointError {
+  InvalidInput(String)
+  SeparationReached(Double, Double)
+} derive(Eq, ToJson, @debug.Debug)
+pub fn JointError::equal(Self, Self) -> Bool
+pub fn JointError::not_equal(Self, Self) -> Bool
+pub fn JointError::to_json(Self) -> Json
+pub fn JointError::to_repr(Self) -> @debug.Repr
+
+pub(all) struct JointProfile {
+  bolt_stiffness_n_per_mm : Double
+  joint_stiffness_n_per_mm : Double
+  preload_n : Double
+  stress_area_mm2 : Double
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn JointProfile::equal(Self, Self) -> Bool
+pub fn JointProfile::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn JointProfile::not_equal(Self, Self) -> Bool
+pub fn JointProfile::to_json(Self) -> Json
+pub fn JointProfile::to_repr(Self) -> @debug.Repr
+
+pub(all) struct JointResult {
+  external_force_n : Double
+  load_fraction : Double
+  bolt_force_n : Double
+  clamp_force_n : Double
+  separation_force_n : Double
+  separation_margin_n : Double
+  stress_mpa : Double
+} derive(ToJson, @debug.Debug)
+pub fn JointResult::to_json(Self) -> Json
+pub fn JointResult::to_repr(Self) -> @debug.Repr
+
+pub(all) struct LoadSample {
+  time_s : Double
+  force_n : Double
+} derive(ToJson, @debug.Debug, @json.FromJson)
+pub fn LoadSample::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn LoadSample::to_json(Self) -> Json
+pub fn LoadSample::to_repr(Self) -> @debug.Repr
+
+pub(all) struct Separation {
+  sample_index : Int
+  time_s : Double
+  force_n : Double
+  separation_force_n : Double
+} derive(ToJson, @debug.Debug)
+pub fn Separation::to_json(Self) -> Json
+pub fn Separation::to_repr(Self) -> @debug.Repr
+
+pub(all) struct StressSample {
+  time_s : Double
+  stress_mpa : Double
+  clamp_force_n : Double
+} derive(ToJson, @debug.Debug)
+pub fn StressSample::to_json(Self) -> Json
+pub fn StressSample::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

@@ -1,0 +1,9 @@
+import {
+  "moonbitlang/core/json",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/double",
+}
+
+import {
+  "gckbbrant/bolt-preload" @app,
+} for "test"
