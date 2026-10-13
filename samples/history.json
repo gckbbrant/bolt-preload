@@ -1,0 +1,52 @@
+{
+  "load_fraction": 0.2,
+  "separation_force_n": 12500,
+  "input_samples": 9,
+  "samples": [
+    {
+      "time_s": 0,
+      "stress_mpa": 200,
+      "clamp_force_n": 10000
+    },
+    {
+      "time_s": 1,
+      "stress_mpa": 216,
+      "clamp_force_n": 6800
+    },
+    {
+      "time_s": 2,
+      "stress_mpa": 204,
+      "clamp_force_n": 9200
+    },
+    {
+      "time_s": 3,
+      "stress_mpa": 232,
+      "clamp_force_n": 3600
+    },
+    {
+      "time_s": 4,
+      "stress_mpa": 208,
+      "clamp_force_n": 8400
+    },
+    {
+      "time_s": 5,
+      "stress_mpa": 224,
+      "clamp_force_n": 5200
+    },
+    {
+      "time_s": 6,
+      "stress_mpa": 200,
+      "clamp_force_n": 10000
+    },
+    {
+      "time_s": 7,
+      "stress_mpa": 216,
+      "clamp_force_n": 6800
+    },
+    {
+      "time_s": 8,
+      "stress_mpa": 200,
+      "clamp_force_n": 10000
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "bolt_stiffness_n_per_mm": 200000,
+  "joint_stiffness_n_per_mm": 800000,
+  "preload_n": 10000,
+  "stress_area_mm2": 50
+}

@@ -1,0 +1,9 @@
+{
+  "external_force_n": 5000,
+  "load_fraction": 0.2,
+  "bolt_force_n": 11000,
+  "clamp_force_n": 6000,
+  "separation_force_n": 12500,
+  "separation_margin_n": 7500,
+  "stress_mpa": 220
+}

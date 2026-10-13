@@ -1,0 +1,23 @@
+{
+  "load_fraction": 0.2,
+  "separation_force_n": 12500,
+  "input_samples": 4,
+  "samples": [
+    {
+      "time_s": 0,
+      "stress_mpa": 200,
+      "clamp_force_n": 10000
+    },
+    {
+      "time_s": 1,
+      "stress_mpa": 220,
+      "clamp_force_n": 6000
+    }
+  ],
+  "separation": {
+    "sample_index": 2,
+    "time_s": 2,
+    "force_n": 12500,
+    "separation_force_n": 12500
+  }
+}
