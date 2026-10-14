@@ -29,3 +29,4 @@ jobs:
         run: |
           (cd _build/fatigue-spectrum && moon update)
           python3 scripts/compare_joints.py --fatigue _build/fatigue-spectrum --output _build/comparison.json
+          FATIGUE_PROJECT=_build/fatigue-spectrum python3 tests/test_comparison.py
