@@ -1,13 +1,23 @@
 {
-  "command": "python scripts/compare_joints.py --fatigue ../fatigue-spectrum",
+  "command": "python scripts/compare_joints.py --fatigue ../fatigue-spectrum --output samples/comparison.json",
   "command_argv": [
     "python",
     "scripts/compare_joints.py",
     "--fatigue",
-    "../fatigue-spectrum"
+    "../fatigue-spectrum",
+    "--output",
+    "samples/comparison.json"
   ],
   "data_source": "samples/loads.csv: synthetic illustrative loads, not measured equipment data",
   "sn_source": "fatigue-spectrum/samples/sn.json: illustrative N=1e10/amplitude^4, not certified material data",
+  "load_format": {
+    "time_column": "time_s",
+    "force_column": "force_n",
+    "time_unit": "s",
+    "force_unit": "N",
+    "delimiter": "comma"
+  },
+  "bin_width_mpa": 10.0,
   "sn_points": [
     {
       "amplitude_mpa": 1,
@@ -28,7 +38,7 @@
     "stiff_joint": {
       "profile": {
         "bolt_stiffness_n_per_mm": 200000,
-        "joint_stiffness_n_per_mm": 800000,
+        "joint_stiffness_n_per_mm": 800000.0,
         "preload_n": 10000,
         "stress_area_mm2": 50
       },
@@ -184,7 +194,7 @@
     "soft_joint": {
       "profile": {
         "bolt_stiffness_n_per_mm": 200000,
-        "joint_stiffness_n_per_mm": 300000,
+        "joint_stiffness_n_per_mm": 300000.0,
         "preload_n": 10000,
         "stress_area_mm2": 50
       },

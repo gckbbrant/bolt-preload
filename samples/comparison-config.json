@@ -1,0 +1,15 @@
+{
+  "profile": "joint.json",
+  "loads": "loads.csv",
+  "fatigue": "../../fatigue-spectrum",
+  "sn": "../../fatigue-spectrum/samples/sn.json",
+  "stiff_stiffness": 800000,
+  "soft_stiffness": 300000,
+  "bin_width": 10,
+  "time_column": "time_s",
+  "force_column": "force_n",
+  "time_unit": "s",
+  "force_unit": "N",
+  "delimiter": "comma",
+  "output": "../_build/config-comparison.json"
+}

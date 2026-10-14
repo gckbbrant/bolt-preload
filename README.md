@@ -41,7 +41,7 @@ stress = Fb / As
 
 `Fb - Fc = F`，应力单位 N/mm² 即 MPa。刚度由使用者依据实际几何与材料提供。模型与公式依据参见 [NASA Fastener Design Manual](https://ntrs.nasa.gov/citations/19900009424)；该实现限定轴向线弹性载荷分配，未实现完整紧固件标准校核、剪切、弯曲、多螺栓分配、塑性、松弛或温度效应。
 
-载荷 CSV 为未加引号的两列：
+默认读取名为 `time_s`、`force_n` 的载荷列：
 
 ```csv
 time_s,force_n
@@ -51,6 +51,14 @@ time_s,force_n
 ```
 
 时间必须有限且严格递增，力有限且非负。接受 UTF-8 BOM、CRLF 和空行。导出的应力 CSV 使用 `time_s,stress_mpa`。
+
+采集软件导出多列文件时，可直接选择列名、分隔符和输入单位。例如 [instrument-loads.csv](samples/instrument-loads.csv) 是含备注、kN 载荷和 ms 时间的合成采集示例：
+
+```sh
+moon run --target native cmd/main -- history samples/joint.json samples/instrument-loads.csv --time-column Clock --force-column Load --time-unit ms --force-unit kN --delimiter semicolon --stress _build/imported-stress.csv
+```
+
+时间单位支持 `s`、`ms`，载荷单位支持 `N`、`kN`；分隔符为 `comma`、`semicolon`、`tab`。单位由参数显式指定，列名只用于定位数据。每条记录占一行；带分隔符的字段可加双引号，字段中的双引号写成两个双引号。其他列可为空或包含文字，但每行字段数须与表头一致；选定列的名称须唯一。数值使用小数点，换算后溢出或非零值变成零会报错。
 
 达到或超过 Fsep 时，单工况返回 `SeparationReached`；历史结果保留此前有效样本及首个分离位置，不再恢复后续分析，不导出完整应力文件。历史 JSON 的 `sample_index` 从 0 开始；未分离时可选 `separation` 字段省略。
 
@@ -64,6 +72,8 @@ CLI 返回码：0 表示所请求计算完成，1 表示历史发生分离，2 �
 - `analyze_load_history(profile, loads)` 返回有效应力前缀与可选分离事件。
 - `parse_load_csv`、`stress_csv` 负责明确单位的文件交换。
 - `render_svg` 生成载荷分配图。
+
+`parse_load_csv` 的可选参数 `time_column`、`force_column`、`delimiter` 可选择测量列，`time_scale`、`force_scale` 将输入乘到 s、N；默认比例均为 1。库调用者应依据输入单位提供有限正比例。
 
 完整的独立调用示例位于 [examples/basic/main.mbt](examples/basic/main.mbt)：
 
@@ -82,7 +92,7 @@ moon run --target js examples/basic
 python scripts/compare_joints.py --fatigue ../fatigue-spectrum
 ```
 
-该脚本使用 `samples/loads.csv` 的合成载荷，分别运行两个 CLI，结果保存在 [samples/comparison.json](samples/comparison.json)。Python 脚本无需额外依赖。
+该脚本使用 `samples/loads.csv` 的合成载荷，分别运行两个 CLI，默认结果保存在 `_build/comparison.json`。[保存的演示结果](samples/comparison.json)采用相同计算。Python 脚本无需额外依赖。
 
 换用自己的数据时，显式提供载荷、接头参数和 S–N 曲线，并指定两种连接件刚度：
 
@@ -90,7 +100,18 @@ python scripts/compare_joints.py --fatigue ../fatigue-spectrum
 python scripts/compare_joints.py --fatigue ../fatigue-spectrum --profile joint.json --loads loads.csv --sn material-sn.json --stiff-stiffness 800000 --soft-stiffness 300000 --bin-width 10 --output _build/my-comparison.json
 ```
 
-`--profile` 中的螺栓刚度、预紧力和有效面积用于两个方案；连接件刚度由两个命令行参数分别替换，单位 N/mm，较硬方案的刚度须大于较软方案。`--loads` 仍要求 `time_s,force_n`，`--sn` 使用疲劳工具的幅值与寿命点格式。刚度和分箱宽度须有限且为正。用户提供的输入路径相对于运行命令的目录解析，`--output` 相对本项目目录解析。
+`--profile` 中的螺栓刚度、预紧力和有效面积用于两个方案；连接件刚度由两个命令行参数分别替换，单位 N/mm，较硬方案的刚度须大于较软方案。`--loads` 默认读取 `time_s,force_n`，`--sn` 使用疲劳工具的幅值与寿命点格式。刚度和分箱宽度须有限且为正。用户提供的输入路径相对于运行命令的目录解析，`--output` 相对本项目目录解析。
+
+多列测量文件也可通过比较脚本的 `--time-column`、`--force-column`、`--time-unit`、`--force-unit`、`--delimiter` 选项导入，含义与 `history` 命令一致。报告的 `load_format` 保留实际采用的列、单位和分隔符，`bin_width_mpa` 保留显示分箱宽度。
+
+反复比较同一份数据时，可保存配置文件：
+
+```sh
+python scripts/compare_joints.py --config samples/comparison-config.json
+python scripts/compare_joints.py --config samples/comparison-config.json --soft-stiffness 250000 --output _build/another-comparison.json
+```
+
+[配置示例](samples/comparison-config.json)只使用合成载荷与演示曲线。配置键为 `profile`、`loads`、`sn`、`fatigue`、`output`、`stiff_stiffness`、`soft_stiffness`、`bin_width`、`time_column`、`force_column`、`time_unit`、`force_unit`、`delimiter`。配置内的路径相对于配置文件所在目录；显式命令行参数优先，命令行输入路径仍相对于调用目录，命令行输出路径仍相对于本项目目录。未设置的项采用帮助中的默认值。未知键、重复键和无效参数会报错；输出也不能覆盖配置文件。输出父目录会自动创建。
 
 两种方案都在分离前且曲线完整覆盖时才生成比较 JSON；任一失败返回 2，并清除指定路径的旧比较文件。输出不能覆盖三个输入文件。恒定载荷下两者的循环损伤都为零，此时 `soft_to_stiff_damage_ratio` 为 `null`，不把未定义的损伤比写成零。比较报告保存实际命令、数据路径、采用的参数与曲线；输入路径不代表数据已经过测量或材料认证。
 
