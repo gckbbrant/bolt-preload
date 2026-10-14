@@ -1,5 +1,11 @@
 {
   "command": "python scripts/compare_joints.py --fatigue ../fatigue-spectrum",
+  "command_argv": [
+    "python",
+    "scripts/compare_joints.py",
+    "--fatigue",
+    "../fatigue-spectrum"
+  ],
   "data_source": "samples/loads.csv: synthetic illustrative loads, not measured equipment data",
   "sn_source": "fatigue-spectrum/samples/sn.json: illustrative N=1e10/amplitude^4, not certified material data",
   "sn_points": [
