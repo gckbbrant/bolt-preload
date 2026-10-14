@@ -84,6 +84,16 @@ python scripts/compare_joints.py --fatigue ../fatigue-spectrum
 
 该脚本使用 `samples/loads.csv` 的合成载荷，分别运行两个 CLI，结果保存在 [samples/comparison.json](samples/comparison.json)。Python 脚本无需额外依赖。
 
+换用自己的数据时，显式提供载荷、接头参数和 S–N 曲线，并指定两种连接件刚度：
+
+```sh
+python scripts/compare_joints.py --fatigue ../fatigue-spectrum --profile joint.json --loads loads.csv --sn material-sn.json --stiff-stiffness 800000 --soft-stiffness 300000 --bin-width 10 --output _build/my-comparison.json
+```
+
+`--profile` 中的螺栓刚度、预紧力和有效面积用于两个方案；连接件刚度由两个命令行参数分别替换，单位 N/mm，较硬方案的刚度须大于较软方案。`--loads` 仍要求 `time_s,force_n`，`--sn` 使用疲劳工具的幅值与寿命点格式。刚度和分箱宽度须有限且为正。用户提供的输入路径相对于运行命令的目录解析，`--output` 相对本项目目录解析。
+
+两种方案都在分离前且曲线完整覆盖时才生成比较 JSON；任一失败返回 2，并清除指定路径的旧比较文件。输出不能覆盖三个输入文件。恒定载荷下两者的循环损伤都为零，此时 `soft_to_stiff_damage_ratio` 为 `null`，不把未定义的损伤比写成零。比较报告保存实际命令、数据路径、采用的参数与曲线；输入路径不代表数据已经过测量或材料认证。
+
 | 示例方案 | 刚度比 C | 最低夹紧力 | 最大名义应力 | 未修正均值的模型损伤 |
 |---|---:|---:|---:|---:|
 | kj = 800000 N/mm | 0.2 | 3600 N | 232 MPa | 7.5024×10⁻⁶ |
@@ -98,8 +108,11 @@ moon check --target native
 moon test --target native
 moon test --target js
 python tests/test_cli.py
+python tests/test_comparison.py
 ```
 
 核心测试覆盖手算、力平衡、分离临界点、完整输入校验、公开记录的导出限制及 CSV。CLI 测试覆盖分离阻断、旧结果清除、输入路径保护与文件单位。Python 仅用于测试和配套示例。
+
+配套测试需要同级的 `fatigue-spectrum` 仓库，验证自定义输入、刚度比较、零损伤、分离和曲线覆盖不足。其路径也可通过 `FATIGUE_PROJECT` 环境变量指定。
 
 许可证：[Apache-2.0](LICENSE)。
