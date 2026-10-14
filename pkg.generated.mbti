@@ -11,7 +11,7 @@ pub fn analyze_joint(JointProfile, Double) -> Result[JointResult, JointError]
 
 pub fn analyze_load_history(JointProfile, ArrayView[LoadSample]) -> Result[HistoryResult, JointError]
 
-pub fn parse_load_csv(StringView) -> Result[Array[LoadSample], JointError]
+pub fn parse_load_csv(StringView, time_column? : String, force_column? : String, time_scale? : Double, force_scale? : Double, delimiter? : String) -> Result[Array[LoadSample], JointError]
 
 pub fn render_svg(JointProfile) -> Result[String, JointError]
 

@@ -48,3 +48,49 @@ test "publicly constructed history cannot disguise a partial export" {
   let partial = { ..valid, samples: valid.samples[:1].to_owned(), }
   assert_true(@app.stress_csv(partial) is Err(@app.InvalidInput(_)))
 }
+
+///|
+test "measurement columns, quoted notes and explicit unit scales" {
+  let samples = @app.parse_load_csv(
+    "\u{FEFF}note;Load;Clock\r\n\"sensor; A\"\"x\"\"\";0;0\r\n\"sensor B\";5;1000\r\n\"sensor C\";2;2000\r\n",
+    time_column="Clock",
+    force_column="Load",
+    time_scale=0.001,
+    force_scale=1000.0,
+    delimiter=";",
+  ).unwrap()
+  assert_eq(samples.length(), 3)
+  assert_eq(samples[1].time_s, 1.0)
+  assert_eq(samples[1].force_n, 5000.0)
+  let tabbed = @app.parse_load_csv(
+    "Clock\tLoad\tnote\n0\t1\t\n1\t2\t\n",
+    time_column="Clock",
+    force_column="Load",
+    delimiter="\t",
+  ).unwrap()
+  assert_eq(tabbed.length(), 2)
+}
+
+///|
+test "measurement imports reject ambiguous columns and lossy conversion" {
+  for
+    text in [
+      "time_s,force_n,force_n\n0,1,2", "time_s,other\n0,1", "time_s,force_n,note\n0,1",
+      "time_s,force_n\n0,\"1", "time_s,force_n\n0,\"1\"oops",
+    ] {
+    assert_true(@app.parse_load_csv(text) is Err(_))
+  }
+  assert_true(
+    @app.parse_load_csv("time_s,force_n\n0,1e308", force_scale=1000.0) is Err(_),
+  )
+  assert_true(
+    @app.parse_load_csv("time_s,force_n\n0,1e-300", force_scale=1.0e-100)
+    is Err(_),
+  )
+  assert_true(
+    @app.parse_load_csv("time_s,force_n\n0,1", time_scale=0.0) is Err(_),
+  )
+  assert_true(
+    @app.parse_load_csv("time_s,force_n\n0,1", force_column="time_s") is Err(_),
+  )
+}

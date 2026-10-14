@@ -68,6 +68,21 @@ class JointCLI(unittest.TestCase):
         self.assertEqual(p.returncode, 2, p.stderr)
         self.assertEqual(profile.read_bytes(), original)
 
+    def test_measurement_column_mapping_and_units(self):
+        loads, stress = self.path / "instrument.csv", self.path / "stress.csv"
+        loads.write_text('note;Load;Clock\n"sensor; A";0;0\n"sensor B";5;1000\n', encoding="utf-8")
+        p = self.run_cli("history", "samples/joint.json", loads, "--time-column", "Clock", "--force-column", "Load", "--time-unit", "ms", "--force-unit", "kN", "--delimiter", "semicolon", "--stress", stress)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(stress.read_text(encoding="utf-8"), "time_s,stress_mpa\n0,200\n1,220\n")
+
+    def test_unknown_input_unit_clears_old_export(self):
+        stress = self.path / "stress.csv"
+        stress.write_text("old result", encoding="utf-8")
+        p = self.run_cli("history", "samples/joint.json", "samples/loads.csv", "--force-unit", "kg", "--stress", stress)
+        self.assertEqual(p.returncode, 2, p.stderr)
+        self.assertIn("force-unit", p.stderr)
+        self.assertFalse(stress.exists())
+
     def test_outputs_cannot_alias_each_other(self):
         output = self.path / "same.txt"
         output.write_text("preserve", encoding="utf-8")
