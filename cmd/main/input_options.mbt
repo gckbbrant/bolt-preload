@@ -50,6 +50,10 @@ fn input_decimal_comma(values : Map[String, Array[String]]) -> Bool raise {
 ///|
 fn measurement_options() -> Array[@argparse.OptionArg] {
   [
+    OptionArg(
+      "input-config",
+      about="Flat versioned measurement preset JSON; explicit options override it.",
+    ),
     OptionArg("time-column", about="Time column name; default time_s."),
     OptionArg("force-column", about="Force column name; default force_n."),
     OptionArg("time-unit", about="Input time unit: s or ms; default s."),

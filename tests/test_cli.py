@@ -67,7 +67,7 @@ class JointCLI(unittest.TestCase):
         p = self.run_cli("normalize", "samples/logger-loads.csv", "--time-column", "Clock", "--force-column", "Load", "--time-unit", "ms", "--force-unit", "kN", "--delimiter", "semicolon", "--skip-rows", "2", "--decimal-separator", "comma", "--csv", canonical, "--json", summary)
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(canonical.read_text(encoding="utf-8"), "time_s,force_n\n0,0\n1,5000\n2,0\n")
-        self.assertEqual(json.loads(summary.read_text(encoding="utf-8")), {"input_samples": 3, "time_start_s": 0, "time_end_s": 2, "minimum_force_n": 0, "maximum_force_n": 5000})
+        self.assertEqual({k: v for k, v in json.loads(summary.read_text(encoding="utf-8")).items() if k not in ("source_format", "canonical_format")}, {"input_samples": 3, "time_start_s": 0, "time_end_s": 2, "minimum_force_n": 0, "maximum_force_n": 5000})
         p = self.run_cli("history", "samples/joint.json", canonical, "--stress", stress)
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(stress.read_text(encoding="utf-8"), "time_s,stress_mpa\n0,200\n1,220\n2,200\n")

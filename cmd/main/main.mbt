@@ -78,6 +78,9 @@ async fn run() -> Unit {
   if loads_path is Some(path) {
     inputs.push(path)
   }
+  if optional(args.values, "input-config") is Some(path) {
+    inputs.push(path)
+  }
   let outputs = [json_path, svg_path, stress_path].filter_map(fn(x) { x })
   prepare_outputs(inputs, outputs)
   let profile : @app.JointProfile = @json.from_json(
@@ -101,7 +104,8 @@ async fn run() -> Unit {
       )
     }
   } else {
-    let loads = read_measurements(required(args.values, "loads"), args.values)
+    let format = measurement_format(args.values)
+    let loads = read_measurements(required(args.values, "loads"), format)
     let result = match @app.analyze_load_history(profile, loads) {
       Ok(value) => value
       Err(error) => fail(@json.to_json(error).stringify())
