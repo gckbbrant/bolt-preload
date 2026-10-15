@@ -25,3 +25,24 @@ fn input_force_scale(values : Map[String, Array[String]]) -> Double raise {
     _ => fail("force-unit must be N or kN")
   }
 }
+
+///|
+fn input_skip_rows(values : Map[String, Array[String]]) -> Int raise {
+  let rows : Int = match optional(values, "skip-rows") {
+    None => 0
+    Some(text) => @string.from_str(text)
+  }
+  if rows < 0 {
+    fail("skip-rows must be nonnegative")
+  }
+  rows
+}
+
+///|
+fn input_decimal_comma(values : Map[String, Array[String]]) -> Bool raise {
+  match optional(values, "decimal-separator") {
+    None | Some("dot") => false
+    Some("comma") => true
+    _ => fail("decimal-separator must be dot or comma")
+  }
+}

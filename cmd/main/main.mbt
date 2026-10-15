@@ -89,6 +89,14 @@ async fn run() -> Unit {
         "delimiter",
         about="CSV separator: comma, semicolon or tab.",
       ),
+      @argparse.OptionArg(
+        "skip-rows",
+        about="Physical preamble lines before header; default 0.",
+      ),
+      @argparse.OptionArg(
+        "decimal-separator",
+        about="Input decimal separator: dot or comma; default dot.",
+      ),
     ],
   )
   let command = @argparse.Command(
@@ -161,6 +169,8 @@ async fn run() -> Unit {
         time_scale=input_time_scale(args.values),
         force_scale=input_force_scale(args.values),
         delimiter=input_delimiter(args.values),
+        skip_rows=input_skip_rows(args.values),
+        decimal_comma=input_decimal_comma(args.values),
       ) {
       Ok(value) => value
       Err(error) => fail(@json.to_json(error).stringify())
