@@ -36,6 +36,20 @@ def positive(text):
     return value
 
 
+def finite_number(text):
+    value = float(text)
+    if not math.isfinite(value):
+        raise argparse.ArgumentTypeError("must be finite")
+    return value
+
+
+def nonzero(text):
+    value = finite_number(text)
+    if value == 0:
+        raise argparse.ArgumentTypeError("must be nonzero")
+    return value
+
+
 def nonnegative(text):
     value = int(text)
     if value < 0 or value > 2147483647:
@@ -63,6 +77,7 @@ def configuration(args, root):
         "time_column": "time_s", "force_column": "force_n",
         "time_unit": "s", "force_unit": "N", "delimiter": "comma",
         "skip_rows": 0, "decimal_separator": "dot",
+        "force_zero": 0, "force_gain": 1,
     }
     paths = {"profile", "loads", "sn", "fatigue", "output"}
     config_path = args.config.resolve() if args.config else None
@@ -99,6 +114,11 @@ def configuration(args, root):
         settings[key] = positive(str(value))
     if settings["stiff_stiffness"] <= settings["soft_stiffness"]:
         raise ValueError("stiff_stiffness must exceed soft_stiffness")
+    for key, convert in (("force_zero", finite_number), ("force_gain", nonzero)):
+        value = settings[key]
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(key + " must be a number")
+        settings[key] = convert(str(value))
     if isinstance(settings["skip_rows"], bool) or not isinstance(settings["skip_rows"], int):
         raise ValueError("skip_rows must be an integer")
     settings["skip_rows"] = nonnegative(str(settings["skip_rows"]))
@@ -140,7 +160,8 @@ def compare(root, fatigue, profile_path, loads, sn, args):
         run(bolt_cli, root, "normalize", snapshot_loads, "--csv", canonical_loads, "--json", summary_path,
             "--time-column", args.time_column, "--force-column", args.force_column,
             "--time-unit", args.time_unit, "--force-unit", args.force_unit, "--delimiter", args.delimiter,
-            "--skip-rows", args.skip_rows, "--decimal-separator", args.decimal_separator)
+            "--skip-rows", args.skip_rows, "--decimal-separator", args.decimal_separator,
+            "--force-zero", args.force_zero, "--force-gain", args.force_gain)
         load_summary = json.loads(summary_path.read_text(encoding="utf-8"))
         fatigue_cli = executable(fatigue)
         for name, stiffness in (("stiff_joint", args.stiff_stiffness), ("soft_joint", args.soft_stiffness)):
@@ -177,7 +198,7 @@ def compare(root, fatigue, profile_path, loads, sn, args):
         "command_argv": ["python"] + sys.argv,
         "data_source": "samples/loads.csv: synthetic illustrative loads, not measured equipment data" if not args.input_loads_provided else str(loads),
         "sn_source": "fatigue-spectrum/samples/sn.json: illustrative N=1e10/amplitude^4, not certified material data" if not args.input_sn_provided else str(sn),
-        "load_format": {key: getattr(args, key) for key in ("time_column", "force_column", "time_unit", "force_unit", "delimiter", "skip_rows", "decimal_separator")},
+        "load_format": {key: getattr(args, key) for key in ("time_column", "force_column", "time_unit", "force_unit", "delimiter", "skip_rows", "decimal_separator", "force_zero", "force_gain")},
         "load_summary": load_summary,
         "bin_width_mpa": args.bin_width,
         "sn_points": sn_points,
@@ -203,6 +224,8 @@ def main():
     parser.add_argument("--force-column", help="input force column; default force_n")
     parser.add_argument("--time-unit", choices=("s", "ms"), help="input time unit; default s")
     parser.add_argument("--force-unit", choices=("N", "kN"), help="input force unit; default N")
+    parser.add_argument("--force-zero", type=finite_number, help="raw channel zero reading; default 0")
+    parser.add_argument("--force-gain", type=nonzero, help="declared input force unit per raw reading; default 1; may be negative")
     parser.add_argument("--delimiter", choices=("comma", "semicolon", "tab"), help="CSV separator; default comma")
     parser.add_argument("--skip-rows", type=nonnegative, help="physical lines before the CSV header; default 0")
     parser.add_argument("--decimal-separator", choices=("dot", "comma"), help="input decimal separator; default dot")

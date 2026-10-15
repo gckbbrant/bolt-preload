@@ -116,6 +116,25 @@ class PairedComparison(unittest.TestCase):
         self.assertEqual(report["load_summary"], {"input_samples": 3, "time_start_s": 0, "time_end_s": 2, "minimum_force_n": 0, "maximum_force_n": 5000})
         self.assertEqual(report["data_source"], str(self.loads))
 
+    def test_sensor_config_calibrates_once_and_records_parameters(self):
+        self.loads.write_text("Clock;Bridge\n0;2.5\n1000;1.5\n2000;2.5\n", encoding="utf-8")
+        config = {
+            "profile": "joint.json", "loads": "loads.csv", "sn": "sn.json",
+            "fatigue": str(FATIGUE), "output": "report.json",
+            "time_column": "Clock", "force_column": "Bridge", "time_unit": "ms",
+            "force_unit": "kN", "delimiter": "semicolon", "force_zero": 2.5, "force_gain": -5,
+        }
+        p = self.run_config(json.dumps(config), "--force-gain=-4e0")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        report = json.loads(self.output.read_text(encoding="utf-8"))
+        self.assertEqual(report["load_format"]["force_zero"], 2.5)
+        self.assertEqual(report["load_format"]["force_gain"], -4)
+        self.assertEqual(report["load_summary"]["maximum_force_n"], 4000)
+        self.assertEqual(report["cases"]["stiff_joint"]["maximum_stress_mpa"], 216)
+        self.assertEqual(report["cases"]["soft_joint"]["maximum_stress_mpa"], 232)
+        self.assertAlmostEqual(report["soft_to_stiff_damage_ratio"], 16)
+        self.assertEqual(report["input_sha256"]["loads"], hashlib.sha256(self.loads.read_bytes()).hexdigest())
+
     def test_config_rejects_unknown_duplicate_and_bad_values(self):
         for text in (
             '{"force_unitt": "kN"}', '{"time_unit": "s", "time_unit": "ms"}',
@@ -123,6 +142,8 @@ class PairedComparison(unittest.TestCase):
             '{"bin_width": 0}', '{"loads": null}', '[]',
             '{"skip_rows": -1}', '{"skip_rows": 1.5}', '{"skip_rows": true}',
             '{"decimal_separator": "locale"}',
+            '{"force_zero": true}', '{"force_gain": 0}', '{"force_gain": "2"}',
+            '{"force_zero": 1e309}', '{"force_gain": 1e309}',
         ):
             p = self.run_config(text)
             self.assertEqual(p.returncode, 2, p.stderr)

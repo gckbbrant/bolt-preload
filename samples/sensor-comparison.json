@@ -1,0 +1,16 @@
+{
+  "profile": "joint.json",
+  "loads": "sensor-loads.csv",
+  "sn": "../../fatigue-spectrum/samples/sn.json",
+  "fatigue": "../../fatigue-spectrum",
+  "output": "../_build/sensor-comparison.json",
+  "time_column": "Clock",
+  "force_column": "Bridge",
+  "time_unit": "ms",
+  "force_unit": "kN",
+  "delimiter": "semicolon",
+  "skip_rows": 1,
+  "decimal_separator": "comma",
+  "force_zero": 2.5,
+  "force_gain": -5
+}
