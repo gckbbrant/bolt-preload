@@ -100,6 +100,22 @@ python scripts/compare_joints.py --config samples/sensor-comparison.json
 
 零点默认为 0，增益默认为 1；零点须有限，增益须有限且非零，可以为负。标定由使用者提供，工具不自动估计零点、去均值或截断负值。原通道可为负，标定后的外载仍须非负。减零点、乘增益和单位换算中发生溢出或非零值变成零均报错，并保留原行号。标定参数始终使用小数点，即使文件数值使用小数逗号。生成的标准 CSV 已完成标定，后续用默认零点、增益和单位，避免重复处理。
 
+### 保存设备的采集配置
+
+同一台采集设备反复导出文件时，可将导入参数保存为 [sensor-input.json](samples/sensor-input.json)，供 `normalize` 和 `history` 共用。该配置对应前面的合成电压通道：
+
+```sh
+moon run --target native cmd/main -- normalize samples/sensor-loads.csv --input-config samples/sensor-input.json --csv _build/preset-loads.csv --json _build/preset-summary.json
+moon run --target native cmd/main -- history samples/joint.json samples/sensor-loads.csv --input-config samples/sensor-input.json --json _build/preset-direct.json
+moon run --target native cmd/main -- history samples/joint.json _build/preset-loads.csv --json _build/preset-reused.json
+```
+
+前两行使用同一份配置，第三行直接复用已标定的标准 CSV，不再传原始配置。直接导入和复用结果相同。若只需调整一项，可追加 `--force-gain -4`，其他项继续来自配置。
+
+输入配置必须包含 `schema_version: 1`、`kind: "load"`。可选字段为 `time_column`、`force_column`、`time_unit`、`force_unit`、`delimiter`、`skip_rows`、`decimal_separator`、`force_zero`、`force_gain`，含义与同名命令行选项一致；未设置项沿用现有默认值，显式命令行参数优先。配置是平面的 JSON 对象，只含格式与标定参数，不包含输入/输出路径、接头参数、曲线或嵌套配置。未知字段、重复键（包括转义后同名）、错误类型、错误版本或 kind 均会报错；配置自身的无效值也不能用命令行覆盖来隐藏。版本号和 `skip_rows` 使用整数字面量，不接受小数或指数写法；非零标定数值下溢成零也会报错。输出不能覆盖输入配置。单载荷 `analyze` 不接受 `--input-config`。
+
+规范化 JSON 在原统计字段之外追加 `source_format` 和 `canonical_format`。[保存的摘要](samples/sensor-summary.json)由合成示例实际生成：`source_format` 记录本次实际生效的列、单位、说明行、小数格式和标定值；`canonical_format` 记录标准 CSV 的默认读取参数，即 s/N、逗号分隔、小数点、零点 0、增益 1。摘要不会自动加载原配置或触发再次标定，文件路径和转换参数也不代表传感器认证。
+
 达到或超过 Fsep 时，单工况返回 `SeparationReached`；历史结果保留此前有效样本及首个分离位置，不再恢复后续分析，不导出完整应力文件。历史 JSON 的 `sample_index` 从 0 开始；未分离时可选 `separation` 字段省略。
 
 CLI 返回码：0 表示所请求计算完成，1 表示历史发生分离，2 表示输入、单工况模型或文件操作错误。输出路径不能覆盖输入或彼此重合；路径检查后会清除已存在的指定输出，避免失败后残留旧应力文件。
@@ -157,7 +173,7 @@ python scripts/compare_joints.py --config samples/comparison-config.json
 python scripts/compare_joints.py --config samples/comparison-config.json --soft-stiffness 250000 --output _build/another-comparison.json
 ```
 
-[配置示例](samples/comparison-config.json)只使用合成载荷与演示曲线。配置键为 `profile`、`loads`、`sn`、`fatigue`、`output`、`stiff_stiffness`、`soft_stiffness`、`bin_width`、`time_column`、`force_column`、`time_unit`、`force_unit`、`delimiter`、`skip_rows`、`decimal_separator`、`force_zero`、`force_gain`。配置内的路径相对于配置文件所在目录；显式命令行参数优先，命令行输入路径仍相对于调用目录，命令行输出路径仍相对于本项目目录。未设置的项采用帮助中的默认值。未知键、重复键和无效参数会报错；输出也不能覆盖配置文件。输出父目录会自动创建。
+[配置示例](samples/comparison-config.json)只使用合成载荷与演示曲线。配置键为 `profile`、`loads`、`sn`、`fatigue`、`output`、`input_config`、`stiff_stiffness`、`soft_stiffness`、`bin_width`、`time_column`、`force_column`、`time_unit`、`force_unit`、`delimiter`、`skip_rows`、`decimal_separator`、`force_zero`、`force_gain`。配置内的路径相对于配置文件所在目录；显式命令行参数优先，命令行输入路径仍相对于调用目录，命令行输出路径仍相对于本项目目录。未设置的项采用帮助中的默认值。未知键、重复键和无效参数会报错；输出也不能覆盖配置文件。输出父目录会自动创建。
 
 带说明行和小数逗号的完整配套示例可以直接运行：
 
@@ -170,6 +186,15 @@ python scripts/compare_joints.py --config samples/logger-comparison.json
 脚本先调用本项目的 `normalize` 检查并转换捕获的载荷，再构建疲劳工具；格式错误会在这一步停止。两种方案共用同一份标准载荷，不会再次套用原始单位或重复换算。报告的 `load_summary` 保存该输入的样本数、时间端点和 N 单位载荷范围；`load_format` 与 `input_sha256` 仍描述原始输入。只更新本项目即可使用此流程，疲劳工具继续通过标准应力 CSV 配套。
 
 [传感器配置](samples/sensor-comparison.json)同样使用合成数据，保存零点与带符号增益。命令行也可用 `--force-zero`、`--force-gain` 覆盖它们；报告的 `load_format` 保留实际应用值，`load_summary` 是标定后的 N 单位载荷范围。Python 比较脚本接收负数科学记数法参数时使用等号形式，例如 `--force-gain=-5e-3`。同一规范化载荷用于两个方案，标定只应用一次。
+
+已有采集配置时，比较 JSON 可用 `input_config` 引用它，也可在命令行提供 `--input-config`。导入参数按“显式命令行 > 比较 JSON > 输入配置 > 默认值”覆盖。例如 [preset-comparison.json](samples/preset-comparison.json)引用合成设备配置，并把增益从 -5 改为 -4：
+
+```sh
+python scripts/compare_joints.py --config samples/preset-comparison.json
+python scripts/compare_joints.py --config samples/preset-comparison.json --force-gain -3 --output _build/preset-override.json
+```
+
+两次比较的峰值外载分别为 4000 N 和 3000 N。配置内 `input_config` 路径相对比较配置目录，显式 `--input-config` 路径相对调用目录。报告 `load_format` 直接采用原生规范化过程返回的实际参数，`canonical_load_format` 说明两种方案共用的标准载荷格式，`load_summary` 继续保留原统计字段。输入配置同样先捕获字节快照，哈希记录在 `input_sha256.input_config`，运行中修改原配置不影响两个方案。输出也不能覆盖该配置。
 
 两种方案都在分离前且曲线完整覆盖时才生成比较 JSON；任一失败返回 2，并清除指定路径的旧比较文件。输出不能覆盖三个输入文件。恒定载荷下两者的循环损伤都为零，此时 `soft_to_stiff_damage_ratio` 为 `null`，不把未定义的损伤比写成零。比较报告保存实际命令、数据路径、采用的参数与曲线；输入路径不代表数据已经过测量或材料认证。
 
@@ -187,6 +212,7 @@ moon check --target native
 moon test --target native
 moon test --target js
 python tests/test_cli.py
+python tests/test_input_config.py
 python tests/test_comparison.py
 ```
 
