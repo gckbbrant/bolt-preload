@@ -1,4 +1,72 @@
 ///|
+test "sensor zero and signed gain precede force unit conversion" {
+  let samples = @app.parse_load_csv(
+    "time_s,force_n\n0,2.5\n1000,1.5\n2000,2.5\n",
+    time_scale=0.001,
+    force_zero=2.5,
+    force_gain=-5.0,
+    force_scale=1000.0,
+  ).unwrap()
+  assert_eq(
+    @app.loads_csv(samples).unwrap(),
+    "time_s,force_n\n0,0\n1,5000\n2,0\n",
+  )
+  let negative_channel = @app.parse_load_csv(
+    "time_s,force_n\n0,-3\n1,-2\n",
+    force_zero=-3.0,
+    force_gain=5.0,
+  ).unwrap()
+  assert_eq(negative_channel[1].force_n, 5.0)
+  assert_true(
+    @app.parse_load_csv("time_s,force_n\n0,1", force_zero=2.0) is Err(_),
+  )
+  assert_eq(
+    @app.parse_load_csv(
+      "time_s,force_n\n0,2",
+      force_zero=2.0,
+      force_gain=1.0e-300,
+    ).unwrap()[0].force_n,
+    0.0,
+  )
+}
+
+///|
+test "sensor calibration rejects invalid parameters and unrepresentable steps" {
+  for value in [@double.infinity, @double.not_a_number] {
+    assert_true(
+      @app.parse_load_csv("time_s,force_n\n0,1", force_zero=value) is Err(_),
+    )
+    assert_true(
+      @app.parse_load_csv("time_s,force_n\n0,1", force_gain=value) is Err(_),
+    )
+  }
+  assert_true(
+    @app.parse_load_csv("time_s,force_n\n0,1", force_gain=0.0) is Err(_),
+  )
+  for
+    (value, zero, gain, scale) in [
+      ("-1e308", 1.0e308, -1.0, 1.0),
+      ("1e308", 0.0, 10.0, 1.0),
+      ("1e-300", 0.0, 1.0e-100, 1.0),
+      ("1e300", 0.0, 1.0e8, 1000.0),
+      ("1e-200", 0.0, 1.0e-100, 1.0e-100),
+    ] {
+    let result = @app.parse_load_csv(
+      "metadata\ntime_s,force_n\n0," + value,
+      skip_rows=1,
+      force_zero=zero,
+      force_gain=gain,
+      force_scale=scale,
+    )
+    assert_true(
+      result is Err(@app.InvalidInput(message)) &&
+      message.contains("line 3") &&
+      message.contains("cannot be represented"),
+    )
+  }
+}
+
+///|
 test "canonical load CSV round trips complete finite samples" {
   let samples : Array[@app.LoadSample] = [
     { time_s: -1.0e250, force_n: 1.0e-250, },

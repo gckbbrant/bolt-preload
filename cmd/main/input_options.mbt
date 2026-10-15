@@ -54,6 +54,16 @@ fn measurement_options() -> Array[@argparse.OptionArg] {
     OptionArg("force-column", about="Force column name; default force_n."),
     OptionArg("time-unit", about="Input time unit: s or ms; default s."),
     OptionArg("force-unit", about="Input force unit: N or kN; default N."),
+    OptionArg(
+      "force-zero",
+      about="Raw channel reading at zero force; default 0.",
+      allow_hyphen_values=true,
+    ),
+    OptionArg(
+      "force-gain",
+      about="Declared input force unit per raw reading, finite and nonzero; default 1.",
+      allow_hyphen_values=true,
+    ),
     OptionArg("delimiter", about="CSV separator: comma, semicolon or tab."),
     OptionArg(
       "skip-rows",
@@ -64,4 +74,19 @@ fn measurement_options() -> Array[@argparse.OptionArg] {
       about="Input decimal separator: dot or comma; default dot.",
     ),
   ]
+}
+
+///|
+fn calibration_number(
+  values : Map[String, Array[String]],
+  key : String,
+  fallback : Double,
+) -> Double raise {
+  match optional(values, key) {
+    None => fallback
+    Some(text) =>
+      @string.from_str(text) catch {
+        _ => fail("\{key} must be a number")
+      }
+  }
 }
