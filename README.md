@@ -60,6 +60,14 @@ moon run --target native cmd/main -- history samples/joint.json samples/instrume
 
 时间单位支持 `s`、`ms`，载荷单位支持 `N`、`kN`；分隔符为 `comma`、`semicolon`、`tab`。单位由参数显式指定，列名只用于定位数据。每条记录占一行；带分隔符的字段可加双引号，字段中的双引号写成两个双引号。其他列可为空或包含文字，但每行字段数须与表头一致；选定列的名称须唯一。数值使用小数点，换算后溢出或非零值变成零会报错。
 
+文件开头有采集说明或使用小数逗号时，可显式选择导入方式。[logger-loads.csv](samples/logger-loads.csv) 是含两行说明、ms 时间和 kN 载荷的合成示例：
+
+```sh
+moon run --target native cmd/main -- history samples/joint.json samples/logger-loads.csv --time-column Clock --force-column Load --time-unit ms --force-unit kN --delimiter semicolon --skip-rows 2 --decimal-separator comma --stress _build/logger-stress.csv
+```
+
+`--skip-rows` 指表头之前的物理行数，包含空行，默认 0；错误信息仍保留原文件行号。`--decimal-separator` 默认 `dot`，也可指定 `comma`；小数逗号配合分号、制表符或带引号字段使用。逗号模式中的 `1,25` 表示 1.25，混用小数点和数字分组会被拒绝。说明行和数值格式均由使用者指定。
+
 达到或超过 Fsep 时，单工况返回 `SeparationReached`；历史结果保留此前有效样本及首个分离位置，不再恢复后续分析，不导出完整应力文件。历史 JSON 的 `sample_index` 从 0 开始；未分离时可选 `separation` 字段省略。
 
 CLI 返回码：0 表示所请求计算完成，1 表示历史发生分离，2 表示输入、单工况模型或文件操作错误。输出路径不能覆盖输入或彼此重合；路径检查后会清除已存在的指定输出，避免失败后残留旧应力文件。
@@ -74,6 +82,8 @@ CLI 返回码：0 表示所请求计算完成，1 表示历史发生分离，2 �
 - `render_svg` 生成载荷分配图。
 
 `parse_load_csv` 的可选参数 `time_column`、`force_column`、`delimiter` 可选择测量列，`time_scale`、`force_scale` 将输入乘到 s、N；默认比例均为 1。库调用者应依据输入单位提供有限正比例。
+
+同一 API 还可传 `skip_rows` 和 `decimal_comma`，默认分别为 0、false；这些选项与命令行使用同一解析过程。
 
 完整的独立调用示例位于 [examples/basic/main.mbt](examples/basic/main.mbt)：
 
@@ -111,7 +121,15 @@ python scripts/compare_joints.py --config samples/comparison-config.json
 python scripts/compare_joints.py --config samples/comparison-config.json --soft-stiffness 250000 --output _build/another-comparison.json
 ```
 
-[配置示例](samples/comparison-config.json)只使用合成载荷与演示曲线。配置键为 `profile`、`loads`、`sn`、`fatigue`、`output`、`stiff_stiffness`、`soft_stiffness`、`bin_width`、`time_column`、`force_column`、`time_unit`、`force_unit`、`delimiter`。配置内的路径相对于配置文件所在目录；显式命令行参数优先，命令行输入路径仍相对于调用目录，命令行输出路径仍相对于本项目目录。未设置的项采用帮助中的默认值。未知键、重复键和无效参数会报错；输出也不能覆盖配置文件。输出父目录会自动创建。
+[配置示例](samples/comparison-config.json)只使用合成载荷与演示曲线。配置键为 `profile`、`loads`、`sn`、`fatigue`、`output`、`stiff_stiffness`、`soft_stiffness`、`bin_width`、`time_column`、`force_column`、`time_unit`、`force_unit`、`delimiter`、`skip_rows`、`decimal_separator`。配置内的路径相对于配置文件所在目录；显式命令行参数优先，命令行输入路径仍相对于调用目录，命令行输出路径仍相对于本项目目录。未设置的项采用帮助中的默认值。未知键、重复键和无效参数会报错；输出也不能覆盖配置文件。输出父目录会自动创建。
+
+带说明行和小数逗号的完整配套示例可以直接运行：
+
+```sh
+python scripts/compare_joints.py --config samples/logger-comparison.json
+```
+
+[这份配置](samples/logger-comparison.json)连接合成采集载荷与演示曲线。每次比较开始时分别读取载荷、参数和曲线一次，两个方案共用临时快照；运行期间原文件变化不影响本次比较。报告的 `input_sha256` 保存这三个原始文件字节的 SHA-256，可与保留的输入文件比对；换行符或 BOM 改变也会影响哈希。报告中的曲线点始终来自本次使用的快照。
 
 两种方案都在分离前且曲线完整覆盖时才生成比较 JSON；任一失败返回 2，并清除指定路径的旧比较文件。输出不能覆盖三个输入文件。恒定载荷下两者的循环损伤都为零，此时 `soft_to_stiff_damage_ratio` 为 `null`，不把未定义的损伤比写成零。比较报告保存实际命令、数据路径、采用的参数与曲线；输入路径不代表数据已经过测量或材料认证。
 

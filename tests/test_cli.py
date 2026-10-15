@@ -75,6 +75,22 @@ class JointCLI(unittest.TestCase):
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(stress.read_text(encoding="utf-8"), "time_s,stress_mpa\n0,200\n1,220\n")
 
+    def test_preamble_and_decimal_comma_preserve_numeric_input(self):
+        source, stress = self.path / "locale.csv", self.path / "stress.csv"
+        source.write_text('instrument export\nsep=;\nClock;Load\n0,0;0,0\n1000,0;5,0\n', encoding="utf-8")
+        p = self.run_cli("history", "samples/joint.json", source, "--time-column", "Clock", "--force-column", "Load", "--time-unit", "ms", "--force-unit", "kN", "--delimiter", "semicolon", "--skip-rows", "2", "--decimal-separator", "comma", "--stress", stress)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(stress.read_text(encoding="utf-8"), "time_s,stress_mpa\n0,200\n1,220\n")
+
+    def test_preamble_keeps_source_line_number_on_invalid_value(self):
+        source, stress = self.path / "invalid.csv", self.path / "stress.csv"
+        source.write_text('instrument export\nsep=;\ntime_s;force_n\n0;1.234,5\n', encoding="utf-8")
+        stress.write_text("stale", encoding="utf-8")
+        p = self.run_cli("history", "samples/joint.json", source, "--delimiter", "semicolon", "--skip-rows", "2", "--decimal-separator", "comma", "--stress", stress)
+        self.assertEqual(p.returncode, 2, p.stderr)
+        self.assertIn("line 4", p.stderr)
+        self.assertFalse(stress.exists())
+
     def test_unknown_input_unit_clears_old_export(self):
         stress = self.path / "stress.csv"
         stress.write_text("old result", encoding="utf-8")

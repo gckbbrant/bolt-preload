@@ -1,10 +1,14 @@
 """Exercise custom paired inputs and failure boundaries with both native CLIs."""
 import json
+import argparse
+import hashlib
+import importlib.util
 import os
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -93,12 +97,13 @@ class PairedComparison(unittest.TestCase):
         ] + list(extra), cwd=elsewhere, capture_output=True, text=True, encoding="utf-8", errors="replace")
 
     def test_config_relative_paths_column_units_and_explicit_override(self):
-        self.loads.write_text('Note;Load;Clock\n"sensor; A";0;0\n"sensor B";5;1000\n"sensor C";0;2000\n', encoding="utf-8")
+        self.loads.write_text('logger export\nsep=;\nNote;Load;Clock\n"sensor; A";0,0;0,0\n"sensor B";5,0;1000,0\n"sensor C";0,0;2000,0\n', encoding="utf-8")
         settings = {
             "profile": "joint.json", "loads": "loads.csv", "sn": "sn.json",
             "fatigue": os.path.relpath(FATIGUE, self.path), "output": "new results/report.json",
             "time_column": "Clock", "force_column": "Load", "time_unit": "ms",
             "force_unit": "kN", "delimiter": "semicolon", "stiff_stiffness": 800000,
+            "skip_rows": 2, "decimal_separator": "comma",
         }
         p = self.run_config(json.dumps(settings), "--stiff-stiffness", "600000")
         self.assertEqual(p.returncode, 0, p.stderr)
@@ -106,6 +111,8 @@ class PairedComparison(unittest.TestCase):
         self.assertEqual(report["cases"]["stiff_joint"]["maximum_stress_mpa"], 225)
         self.assertEqual(report["cases"]["stiff_joint"]["stress_samples"][1]["time_s"], 1)
         self.assertEqual(report["load_format"]["force_unit"], "kN")
+        self.assertEqual(report["load_format"]["skip_rows"], 2)
+        self.assertEqual(report["load_format"]["decimal_separator"], "comma")
         self.assertEqual(report["data_source"], str(self.loads))
 
     def test_config_rejects_unknown_duplicate_and_bad_values(self):
@@ -113,6 +120,8 @@ class PairedComparison(unittest.TestCase):
             '{"force_unitt": "kN"}', '{"time_unit": "s", "time_unit": "ms"}',
             '{"force_unit": "kg"}', '{"stiff_stiffness": true}',
             '{"bin_width": 0}', '{"loads": null}', '[]',
+            '{"skip_rows": -1}', '{"skip_rows": 1.5}', '{"skip_rows": true}',
+            '{"decimal_separator": "locale"}',
         ):
             p = self.run_config(text)
             self.assertEqual(p.returncode, 2, p.stderr)
@@ -123,6 +132,30 @@ class PairedComparison(unittest.TestCase):
         p = self.run_config(text)
         self.assertEqual(p.returncode, 2, p.stderr)
         self.assertEqual((self.path / "comparison.json").read_text(encoding="utf-8"), text)
+
+    def test_comparison_uses_one_snapshot_even_when_source_files_change(self):
+        spec = importlib.util.spec_from_file_location("paired_script", ROOT / "scripts/compare_joints.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        args = argparse.Namespace(config=None, profile=self.profile, loads=self.loads, sn=self.sn, fatigue=FATIGUE, output=self.output)
+        module.configuration(args, ROOT)
+        original = {"profile": self.profile.read_bytes(), "loads": self.loads.read_bytes(), "sn": self.sn.read_bytes()}
+        original_run = module.run
+        changed = []
+        def change_after_history(binary, root, *arguments):
+            result = original_run(binary, root, *arguments)
+            if arguments[0] == "history" and not changed:
+                self.loads.write_bytes((ROOT / "samples/separated.csv").read_bytes())
+                self.sn.write_text('[{"amplitude_mpa": 1, "cycles_to_failure": 100}, {"amplitude_mpa": 2, "cycles_to_failure": 10}]', encoding="utf-8")
+                changed.append(True)
+            return result
+        with mock.patch.object(module, "run", side_effect=change_after_history):
+            report = module.compare(ROOT, FATIGUE, self.profile, self.loads, self.sn, args)
+        self.assertTrue(changed)
+        self.assertEqual(report["cases"]["stiff_joint"]["maximum_stress_mpa"], 220)
+        self.assertEqual(report["cases"]["soft_joint"]["maximum_stress_mpa"], 240)
+        self.assertEqual(report["sn_points"], json.loads(original["sn"].decode("utf-8")))
+        self.assertEqual(report["input_sha256"], {key: hashlib.sha256(value).hexdigest() for key, value in original.items()})
 
 
 if __name__ == "__main__":

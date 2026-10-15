@@ -15,7 +15,9 @@
     "force_column": "force_n",
     "time_unit": "s",
     "force_unit": "N",
-    "delimiter": "comma"
+    "delimiter": "comma",
+    "skip_rows": 0,
+    "decimal_separator": "dot"
   },
   "bin_width_mpa": 10.0,
   "sn_points": [
@@ -32,6 +34,11 @@
       "cycles_to_failure": 100
     }
   ],
+  "input_sha256": {
+    "profile": "12954b1940a4a205a06595bb64a2b840f39189433f9f842e061171456285e078",
+    "loads": "3851e4a8714cfaa6b33bc6a73bad6483e357b87d6344ed60f886277a6bc76d91",
+    "sn": "a36f464e760f72b9101a905f3e13d8e8ba9ee2d41dea57cae1e2da23ca5f0836"
+  },
   "mean_stress_model": "none",
   "interpretation": "Compare the linear joint response and uncorrected Miner model only; this is not a measured fatigue-life result.",
   "cases": {

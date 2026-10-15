@@ -4,6 +4,7 @@ No Python dependencies. Requires the sibling fatigue-spectrum project and moon.
 """
 import argparse
 import json
+import hashlib
 import math
 import os
 import shlex
@@ -35,6 +36,13 @@ def positive(text):
     return value
 
 
+def nonnegative(text):
+    value = int(text)
+    if value < 0 or value > 2147483647:
+        raise argparse.ArgumentTypeError("must be an integer between 0 and 2147483647")
+    return value
+
+
 def write_report(output, report):
     temporary = None
     try:
@@ -54,6 +62,7 @@ def configuration(args, root):
         "stiff_stiffness": 800000, "soft_stiffness": 300000, "bin_width": 10,
         "time_column": "time_s", "force_column": "force_n",
         "time_unit": "s", "force_unit": "N", "delimiter": "comma",
+        "skip_rows": 0, "decimal_separator": "dot",
     }
     paths = {"profile", "loads", "sn", "fatigue", "output"}
     config_path = args.config.resolve() if args.config else None
@@ -90,7 +99,10 @@ def configuration(args, root):
         settings[key] = positive(str(value))
     if settings["stiff_stiffness"] <= settings["soft_stiffness"]:
         raise ValueError("stiff_stiffness must exceed soft_stiffness")
-    for key, allowed in (("time_unit", ("s", "ms")), ("force_unit", ("N", "kN")), ("delimiter", ("comma", "semicolon", "tab"))):
+    if isinstance(settings["skip_rows"], bool) or not isinstance(settings["skip_rows"], int):
+        raise ValueError("skip_rows must be an integer")
+    settings["skip_rows"] = nonnegative(str(settings["skip_rows"]))
+    for key, allowed in (("time_unit", ("s", "ms")), ("force_unit", ("N", "kN")), ("delimiter", ("comma", "semicolon", "tab")), ("decimal_separator", ("dot", "comma"))):
         if settings[key] not in allowed:
             raise ValueError(key + " must be one of " + ", ".join(allowed))
     for key in ("time_column", "force_column"):
@@ -112,11 +124,17 @@ def configuration(args, root):
 
 
 def compare(root, fatigue, profile_path, loads, sn, args):
+    raw_inputs = {"profile": profile_path.read_bytes(), "loads": loads.read_bytes(), "sn": sn.read_bytes()}
+    profile = json.loads(raw_inputs["profile"].decode("utf-8-sig"))
+    sn_points = json.loads(raw_inputs["sn"].decode("utf-8-sig"))
     bolt_cli, fatigue_cli = executable(root), executable(fatigue)
-    profile = json.loads(profile_path.read_text(encoding="utf-8-sig"))
     cases = {}
     with tempfile.TemporaryDirectory(prefix="joint-comparison-", dir=root / "_build") as directory:
         working = Path(directory)
+        snapshot_loads = working / "input-loads.csv"
+        snapshot_sn = working / "input-sn.json"
+        snapshot_loads.write_bytes(raw_inputs["loads"])
+        snapshot_sn.write_bytes(raw_inputs["sn"])
         for name, stiffness in (("stiff_joint", args.stiff_stiffness), ("soft_joint", args.soft_stiffness)):
             current = dict(profile, joint_stiffness_n_per_mm=stiffness)
             current_path = working / (name + ".json")
@@ -124,10 +142,11 @@ def compare(root, fatigue, profile_path, loads, sn, args):
             history_path = working / (name + "-history.json")
             fatigue_path = working / (name + "-fatigue.json")
             current_path.write_text(json.dumps(current, indent=2) + "\n", encoding="utf-8")
-            run(bolt_cli, root, "history", current_path, loads, "--stress", stress_path, "--json", history_path,
+            run(bolt_cli, root, "history", current_path, snapshot_loads, "--stress", stress_path, "--json", history_path,
                 "--time-column", args.time_column, "--force-column", args.force_column,
-                "--time-unit", args.time_unit, "--force-unit", args.force_unit, "--delimiter", args.delimiter)
-            run(fatigue_cli, fatigue, "analyze", stress_path, "--sn", sn, "--bin-width", args.bin_width, "--json", fatigue_path)
+                "--time-unit", args.time_unit, "--force-unit", args.force_unit, "--delimiter", args.delimiter,
+                "--skip-rows", args.skip_rows, "--decimal-separator", args.decimal_separator)
+            run(fatigue_cli, fatigue, "analyze", stress_path, "--sn", snapshot_sn, "--bin-width", args.bin_width, "--json", fatigue_path)
             history = json.loads(history_path.read_text(encoding="utf-8"))
             spectrum = json.loads(fatigue_path.read_text(encoding="utf-8"))
             if history.get("separation") is not None or spectrum["damage"].get("total_damage") is None:
@@ -153,9 +172,10 @@ def compare(root, fatigue, profile_path, loads, sn, args):
         "command_argv": ["python"] + sys.argv,
         "data_source": "samples/loads.csv: synthetic illustrative loads, not measured equipment data" if not args.input_loads_provided else str(loads),
         "sn_source": "fatigue-spectrum/samples/sn.json: illustrative N=1e10/amplitude^4, not certified material data" if not args.input_sn_provided else str(sn),
-        "load_format": {key: getattr(args, key) for key in ("time_column", "force_column", "time_unit", "force_unit", "delimiter")},
+        "load_format": {key: getattr(args, key) for key in ("time_column", "force_column", "time_unit", "force_unit", "delimiter", "skip_rows", "decimal_separator")},
         "bin_width_mpa": args.bin_width,
-        "sn_points": json.loads(sn.read_text(encoding="utf-8-sig")),
+        "sn_points": sn_points,
+        "input_sha256": {key: hashlib.sha256(value).hexdigest() for key, value in raw_inputs.items()},
         "mean_stress_model": "none",
         "interpretation": "Compare the linear joint response and uncorrected Miner model only; this is not a measured fatigue-life result.",
         "cases": cases,
@@ -178,6 +198,8 @@ def main():
     parser.add_argument("--time-unit", choices=("s", "ms"), help="input time unit; default s")
     parser.add_argument("--force-unit", choices=("N", "kN"), help="input force unit; default N")
     parser.add_argument("--delimiter", choices=("comma", "semicolon", "tab"), help="CSV separator; default comma")
+    parser.add_argument("--skip-rows", type=nonnegative, help="physical lines before the CSV header; default 0")
+    parser.add_argument("--decimal-separator", choices=("dot", "comma"), help="input decimal separator; default dot")
     parser.add_argument("--output", type=Path, help="report path; default _build/comparison.json")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
