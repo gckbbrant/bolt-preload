@@ -38,6 +38,7 @@ def positive(text):
 def write_report(output, report):
     temporary = None
     try:
+        output.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=output.parent, prefix="comparison-", suffix=".json", delete=False) as stream:
             temporary = Path(stream.name)
             json.dump(report, stream, indent=2, allow_nan=False)
@@ -46,6 +47,68 @@ def write_report(output, report):
     finally:
         if temporary is not None and temporary.exists():
             temporary.unlink()
+
+
+def configuration(args, root):
+    settings = {
+        "stiff_stiffness": 800000, "soft_stiffness": 300000, "bin_width": 10,
+        "time_column": "time_s", "force_column": "force_n",
+        "time_unit": "s", "force_unit": "N", "delimiter": "comma",
+    }
+    paths = {"profile", "loads", "sn", "fatigue", "output"}
+    config_path = args.config.resolve() if args.config else None
+    supplied = {}
+    if config_path is not None:
+        def unique_keys(pairs):
+            result = {}
+            for key, value in pairs:
+                if key in result:
+                    raise ValueError("duplicate configuration key: " + key)
+                result[key] = value
+            return result
+        supplied = json.loads(config_path.read_text(encoding="utf-8-sig"), object_pairs_hook=unique_keys)
+        if not isinstance(supplied, dict):
+            raise ValueError("configuration must be a JSON object")
+        unknown = set(supplied) - paths - set(settings)
+        if unknown:
+            raise ValueError("unknown configuration keys: " + ", ".join(sorted(unknown)))
+        for key, value in supplied.items():
+            if key in paths:
+                if not isinstance(value, str) or not value.strip():
+                    raise ValueError(key + " must be a nonempty file or directory path")
+                settings[key] = (config_path.parent / value).resolve()
+            else:
+                settings[key] = value
+    for key in paths | set(settings):
+        value = getattr(args, key, None)
+        if value is not None:
+            settings[key] = value.resolve() if key in paths and key != "output" else value
+    for key in ("stiff_stiffness", "soft_stiffness", "bin_width"):
+        value = settings[key]
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(key + " must be a number")
+        settings[key] = positive(str(value))
+    if settings["stiff_stiffness"] <= settings["soft_stiffness"]:
+        raise ValueError("stiff_stiffness must exceed soft_stiffness")
+    for key, allowed in (("time_unit", ("s", "ms")), ("force_unit", ("N", "kN")), ("delimiter", ("comma", "semicolon", "tab"))):
+        if settings[key] not in allowed:
+            raise ValueError(key + " must be one of " + ", ".join(allowed))
+    for key in ("time_column", "force_column"):
+        if not isinstance(settings[key], str) or not settings[key].strip():
+            raise ValueError(key + " must be a nonempty column name")
+    if settings["time_column"] == settings["force_column"]:
+        raise ValueError("time_column and force_column must be distinct")
+    for key in settings.keys() - paths:
+        setattr(args, key, settings[key])
+    fatigue = settings.get("fatigue", root.parent / "fatigue-spectrum")
+    args.input_loads_provided = args.loads is not None or "loads" in supplied
+    args.input_sn_provided = args.sn is not None or "sn" in supplied
+    return (
+        settings.get("profile", root / "samples/joint.json"),
+        settings.get("loads", root / "samples/loads.csv"),
+        settings.get("sn", fatigue / "samples/sn.json"),
+        fatigue, root / settings.get("output", Path("_build/comparison.json")), config_path,
+    )
 
 
 def compare(root, fatigue, profile_path, loads, sn, args):
@@ -61,7 +124,9 @@ def compare(root, fatigue, profile_path, loads, sn, args):
             history_path = working / (name + "-history.json")
             fatigue_path = working / (name + "-fatigue.json")
             current_path.write_text(json.dumps(current, indent=2) + "\n", encoding="utf-8")
-            run(bolt_cli, root, "history", current_path, loads, "--stress", stress_path, "--json", history_path)
+            run(bolt_cli, root, "history", current_path, loads, "--stress", stress_path, "--json", history_path,
+                "--time-column", args.time_column, "--force-column", args.force_column,
+                "--time-unit", args.time_unit, "--force-unit", args.force_unit, "--delimiter", args.delimiter)
             run(fatigue_cli, fatigue, "analyze", stress_path, "--sn", sn, "--bin-width", args.bin_width, "--json", fatigue_path)
             history = json.loads(history_path.read_text(encoding="utf-8"))
             spectrum = json.loads(fatigue_path.read_text(encoding="utf-8"))
@@ -86,8 +151,10 @@ def compare(root, fatigue, profile_path, loads, sn, args):
     return {
         "command": subprocess.list2cmdline(["python"] + sys.argv) if os.name == "nt" else " ".join(shlex.quote(a) for a in ["python"] + sys.argv),
         "command_argv": ["python"] + sys.argv,
-        "data_source": "samples/loads.csv: synthetic illustrative loads, not measured equipment data" if args.loads is None else str(loads),
-        "sn_source": "fatigue-spectrum/samples/sn.json: illustrative N=1e10/amplitude^4, not certified material data" if args.sn is None else str(sn),
+        "data_source": "samples/loads.csv: synthetic illustrative loads, not measured equipment data" if not args.input_loads_provided else str(loads),
+        "sn_source": "fatigue-spectrum/samples/sn.json: illustrative N=1e10/amplitude^4, not certified material data" if not args.input_sn_provided else str(sn),
+        "load_format": {key: getattr(args, key) for key in ("time_column", "force_column", "time_unit", "force_unit", "delimiter")},
+        "bin_width_mpa": args.bin_width,
         "sn_points": json.loads(sn.read_text(encoding="utf-8-sig")),
         "mean_stress_model": "none",
         "interpretation": "Compare the linear joint response and uncorrected Miner model only; this is not a measured fatigue-life result.",
@@ -98,24 +165,28 @@ def compare(root, fatigue, profile_path, loads, sn, args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--config", type=Path, help="comparison JSON; its paths are relative to the config file; explicit options override it")
     parser.add_argument("--fatigue", type=Path, help="fatigue-spectrum project directory; default is the sibling project")
     parser.add_argument("--profile", type=Path, help="joint profile JSON; default samples/joint.json")
     parser.add_argument("--loads", type=Path, help="time_s,force_n CSV; default synthetic samples/loads.csv")
     parser.add_argument("--sn", type=Path, help="S-N JSON; default synthetic fatigue-spectrum/samples/sn.json")
-    parser.add_argument("--stiff-stiffness", type=positive, default=800000, help="stiffer joint stiffness in N/mm")
-    parser.add_argument("--soft-stiffness", type=positive, default=300000, help="softer joint stiffness in N/mm")
-    parser.add_argument("--bin-width", type=positive, default=10, help="display range-bin width in MPa")
-    parser.add_argument("--output", type=Path, default=Path("samples/comparison.json"))
+    parser.add_argument("--stiff-stiffness", type=positive, help="stiffer joint stiffness in N/mm; default 800000")
+    parser.add_argument("--soft-stiffness", type=positive, help="softer joint stiffness in N/mm; default 300000")
+    parser.add_argument("--bin-width", type=positive, help="display range-bin width in MPa; default 10")
+    parser.add_argument("--time-column", help="input time column; default time_s")
+    parser.add_argument("--force-column", help="input force column; default force_n")
+    parser.add_argument("--time-unit", choices=("s", "ms"), help="input time unit; default s")
+    parser.add_argument("--force-unit", choices=("N", "kN"), help="input force unit; default N")
+    parser.add_argument("--delimiter", choices=("comma", "semicolon", "tab"), help="CSV separator; default comma")
+    parser.add_argument("--output", type=Path, help="report path; default _build/comparison.json")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
-    fatigue = args.fatigue.resolve() if args.fatigue else root.parent / "fatigue-spectrum"
-    if args.stiff_stiffness <= args.soft_stiffness:
-        parser.error("--stiff-stiffness must exceed --soft-stiffness")
-    profile_path = args.profile.resolve() if args.profile else root / "samples/joint.json"
-    loads = args.loads.resolve() if args.loads else root / "samples/loads.csv"
-    sn = args.sn.resolve() if args.sn else fatigue / "samples/sn.json"
-    output = args.output if args.output.is_absolute() else root / args.output
-    for input_path in (profile_path, loads, sn):
+    try:
+        profile_path, loads, sn, fatigue, output, config_path = configuration(args, root)
+    except (OSError, ValueError, argparse.ArgumentTypeError) as error:
+        parser.error(str(error))
+    inputs = [profile_path, loads, sn] + ([config_path] if config_path else [])
+    for input_path in inputs:
         if output.resolve() == input_path.resolve() or (output.exists() and input_path.exists() and output.samefile(input_path)):
             parser.error("output must not overwrite an input: " + str(input_path))
     try:

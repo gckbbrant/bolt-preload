@@ -69,6 +69,26 @@ async fn run() -> Unit {
         about="Write history JSON, including any separation event.",
       ),
       @argparse.OptionArg("svg", about="Write force distribution SVG."),
+      @argparse.OptionArg(
+        "time-column",
+        about="Time column name; default time_s.",
+      ),
+      @argparse.OptionArg(
+        "force-column",
+        about="Force column name; default force_n.",
+      ),
+      @argparse.OptionArg(
+        "time-unit",
+        about="Input time unit: s or ms; default s.",
+      ),
+      @argparse.OptionArg(
+        "force-unit",
+        about="Input force unit: N or kN; default N.",
+      ),
+      @argparse.OptionArg(
+        "delimiter",
+        about="CSV separator: comma, semicolon or tab.",
+      ),
     ],
   )
   let command = @argparse.Command(
@@ -134,7 +154,14 @@ async fn run() -> Unit {
     }
   } else {
     let loads = match
-      @app.parse_load_csv(@fs.read_file(required(args.values, "loads")).text()) {
+      @app.parse_load_csv(
+        @fs.read_file(required(args.values, "loads")).text(),
+        time_column=optional(args.values, "time-column").unwrap_or("time_s"),
+        force_column=optional(args.values, "force-column").unwrap_or("force_n"),
+        time_scale=input_time_scale(args.values),
+        force_scale=input_force_scale(args.values),
+        delimiter=input_delimiter(args.values),
+      ) {
       Ok(value) => value
       Err(error) => fail(@json.to_json(error).stringify())
     }
