@@ -13,6 +13,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+LOAD_OPTIONS = (
+    "time_column", "force_column", "time_unit", "force_unit", "delimiter",
+    "skip_rows", "decimal_separator", "force_zero", "force_gain",
+)
+
 
 def executable(root):
     subprocess.run(["moon", "build", "--target", "native"], cwd=root, check=True)
@@ -79,7 +84,7 @@ def configuration(args, root):
         "skip_rows": 0, "decimal_separator": "dot",
         "force_zero": 0, "force_gain": 1,
     }
-    paths = {"profile", "loads", "sn", "fatigue", "output"}
+    paths = {"profile", "loads", "sn", "fatigue", "output", "input_config"}
     config_path = args.config.resolve() if args.config else None
     supplied = {}
     if config_path is not None:
@@ -103,10 +108,14 @@ def configuration(args, root):
                 settings[key] = (config_path.parent / value).resolve()
             else:
                 settings[key] = value
+    explicit_load_options = set(supplied) & set(LOAD_OPTIONS)
     for key in paths | set(settings):
         value = getattr(args, key, None)
         if value is not None:
             settings[key] = value.resolve() if key in paths and key != "output" else value
+            if key in LOAD_OPTIONS:
+                explicit_load_options.add(key)
+    args.input_config = settings.get("input_config")
     for key in ("stiff_stiffness", "soft_stiffness", "bin_width"):
         value = settings[key]
         if isinstance(value, bool) or not isinstance(value, (int, float)):
@@ -128,8 +137,9 @@ def configuration(args, root):
     for key in ("time_column", "force_column"):
         if not isinstance(settings[key], str) or not settings[key].strip():
             raise ValueError(key + " must be a nonempty column name")
-    if settings["time_column"] == settings["force_column"]:
+    if args.input_config is None and settings["time_column"] == settings["force_column"]:
         raise ValueError("time_column and force_column must be distinct")
+    args.load_overrides = {key: settings[key] for key in LOAD_OPTIONS if key in explicit_load_options}
     for key in settings.keys() - paths:
         setattr(args, key, settings[key])
     fatigue = settings.get("fatigue", root.parent / "fatigue-spectrum")
@@ -145,6 +155,8 @@ def configuration(args, root):
 
 def compare(root, fatigue, profile_path, loads, sn, args):
     raw_inputs = {"profile": profile_path.read_bytes(), "loads": loads.read_bytes(), "sn": sn.read_bytes()}
+    if args.input_config is not None:
+        raw_inputs["input_config"] = args.input_config.read_bytes()
     profile = json.loads(raw_inputs["profile"].decode("utf-8-sig"))
     sn_points = json.loads(raw_inputs["sn"].decode("utf-8-sig"))
     bolt_cli = executable(root)
@@ -157,12 +169,17 @@ def compare(root, fatigue, profile_path, loads, sn, args):
         snapshot_sn.write_bytes(raw_inputs["sn"])
         canonical_loads = working / "loads.csv"
         summary_path = working / "load-summary.json"
-        run(bolt_cli, root, "normalize", snapshot_loads, "--csv", canonical_loads, "--json", summary_path,
-            "--time-column", args.time_column, "--force-column", args.force_column,
-            "--time-unit", args.time_unit, "--force-unit", args.force_unit, "--delimiter", args.delimiter,
-            "--skip-rows", args.skip_rows, "--decimal-separator", args.decimal_separator,
-            "--force-zero", args.force_zero, "--force-gain", args.force_gain)
+        import_options = []
+        if args.input_config is not None:
+            snapshot_config = working / "input-config.json"
+            snapshot_config.write_bytes(raw_inputs["input_config"])
+            import_options += ["--input-config", snapshot_config]
+        for key, value in args.load_overrides.items():
+            import_options += ["--" + key.replace("_", "-"), value]
+        run(bolt_cli, root, "normalize", snapshot_loads, "--csv", canonical_loads, "--json", summary_path, *import_options)
         load_summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        load_format = load_summary.pop("source_format")
+        canonical_format = load_summary.pop("canonical_format")
         fatigue_cli = executable(fatigue)
         for name, stiffness in (("stiff_joint", args.stiff_stiffness), ("soft_joint", args.soft_stiffness)):
             current = dict(profile, joint_stiffness_n_per_mm=stiffness)
@@ -198,7 +215,8 @@ def compare(root, fatigue, profile_path, loads, sn, args):
         "command_argv": ["python"] + sys.argv,
         "data_source": "samples/loads.csv: synthetic illustrative loads, not measured equipment data" if not args.input_loads_provided else str(loads),
         "sn_source": "fatigue-spectrum/samples/sn.json: illustrative N=1e10/amplitude^4, not certified material data" if not args.input_sn_provided else str(sn),
-        "load_format": {key: getattr(args, key) for key in ("time_column", "force_column", "time_unit", "force_unit", "delimiter", "skip_rows", "decimal_separator", "force_zero", "force_gain")},
+        "load_format": load_format,
+        "canonical_load_format": canonical_format,
         "load_summary": load_summary,
         "bin_width_mpa": args.bin_width,
         "sn_points": sn_points,
@@ -213,6 +231,7 @@ def compare(root, fatigue, profile_path, loads, sn, args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, help="comparison JSON; its paths are relative to the config file; explicit options override it")
+    parser.add_argument("--input-config", type=Path, help="load measurement preset; comparison import settings and explicit options override it")
     parser.add_argument("--fatigue", type=Path, help="fatigue-spectrum project directory; default is the sibling project")
     parser.add_argument("--profile", type=Path, help="joint profile JSON; default samples/joint.json")
     parser.add_argument("--loads", type=Path, help="time_s,force_n CSV; default synthetic samples/loads.csv")
@@ -237,6 +256,8 @@ def main():
     except (OSError, ValueError, argparse.ArgumentTypeError) as error:
         parser.error(str(error))
     inputs = [profile_path, loads, sn] + ([config_path] if config_path else [])
+    if args.input_config is not None:
+        inputs.append(args.input_config)
     for input_path in inputs:
         if output.resolve() == input_path.resolve() or (output.exists() and input_path.exists() and output.samefile(input_path)):
             parser.error("output must not overwrite an input: " + str(input_path))

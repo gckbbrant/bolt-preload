@@ -135,6 +135,75 @@ class PairedComparison(unittest.TestCase):
         self.assertAlmostEqual(report["soft_to_stiff_damage_ratio"], 16)
         self.assertEqual(report["input_sha256"]["loads"], hashlib.sha256(self.loads.read_bytes()).hexdigest())
 
+    def sensor_preset(self):
+        preset = self.path / "input preset.json"
+        preset.write_text(json.dumps({"schema_version": 1, "kind": "load", "time_column": "Clock", "force_column": "Bridge", "time_unit": "ms", "force_unit": "kN", "delimiter": "semicolon", "force_zero": 2.5, "force_gain": -5}), encoding="utf-8")
+        self.loads.write_text("Clock;Bridge\n0;2.5\n1000;1.5\n2000;2.5\n", encoding="utf-8")
+        return preset
+
+    def test_preset_comparison_and_cli_precedence_from_another_directory(self):
+        preset = self.sensor_preset()
+        settings = {"profile": "joint.json", "loads": "loads.csv", "sn": "sn.json", "fatigue": str(FATIGUE), "output": "report.json", "input_config": preset.name, "force_gain": -4}
+        p = self.run_config(json.dumps(settings), "--force-gain", "-3")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        report = json.loads(self.output.read_text(encoding="utf-8"))
+        self.assertEqual(report["load_summary"]["maximum_force_n"], 3000)
+        self.assertEqual(report["load_format"]["force_gain"], -3)
+        self.assertEqual(report["load_format"]["force_zero"], 2.5)
+        self.assertEqual(report["load_format"]["force_unit"], "kN")
+        self.assertEqual(report["canonical_load_format"]["force_unit"], "N")
+        self.assertEqual(report["canonical_load_format"]["force_gain"], 1)
+        self.assertEqual(report["input_sha256"]["input_config"], hashlib.sha256(preset.read_bytes()).hexdigest())
+        p = self.run_config(json.dumps(settings))
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(json.loads(self.output.read_text(encoding="utf-8"))["load_summary"]["maximum_force_n"], 4000)
+        del settings["force_gain"]
+        p = self.run_config(json.dumps(settings))
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(json.loads(self.output.read_text(encoding="utf-8"))["load_summary"]["maximum_force_n"], 5000)
+
+    def test_input_preset_cannot_be_overwritten(self):
+        preset = self.sensor_preset()
+        original = preset.read_bytes()
+        p = self.run_comparison("--input-config", str(preset), "--output", str(preset))
+        self.assertEqual(p.returncode, 2, p.stderr)
+        self.assertEqual(preset.read_bytes(), original)
+
+    def test_invalid_preset_is_not_hidden_by_comparison_override(self):
+        preset = self.sensor_preset()
+        settings = json.loads(preset.read_text(encoding="utf-8"))
+        settings["force_gain"] = 0
+        preset.write_text(json.dumps(settings), encoding="utf-8")
+        self.output.write_text("stale", encoding="utf-8")
+        p = self.run_comparison("--input-config", str(preset), "--force-gain", "-5")
+        self.assertEqual(p.returncode, 2, p.stderr)
+        self.assertIn("gain", p.stderr)
+        self.assertFalse(self.output.exists())
+
+    def test_preset_snapshot_survives_source_change_before_normalization(self):
+        preset = self.sensor_preset()
+        original = preset.read_bytes()
+        spec = importlib.util.spec_from_file_location("paired_script", ROOT / "scripts/compare_joints.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        args = argparse.Namespace(config=None, profile=self.profile, loads=self.loads, sn=self.sn, fatigue=FATIGUE, output=self.output, input_config=preset)
+        module.configuration(args, ROOT)
+        build = module.executable
+        changed = []
+        def change_during_build(root):
+            binary = build(root)
+            if root == ROOT and not changed:
+                preset.write_text('{"schema_version":1,"kind":"load","force_gain":0}', encoding="utf-8")
+                changed.append(True)
+            return binary
+        with mock.patch.object(module, "executable", side_effect=change_during_build):
+            report = module.compare(ROOT, FATIGUE, self.profile, self.loads, self.sn, args)
+        self.assertTrue(changed)
+        self.assertEqual(report["input_sha256"]["input_config"], hashlib.sha256(original).hexdigest())
+        self.assertEqual(report["load_format"]["force_gain"], -5)
+        self.assertEqual(report["cases"]["stiff_joint"]["maximum_stress_mpa"], 220)
+        self.assertEqual(report["cases"]["soft_joint"]["maximum_stress_mpa"], 240)
+
     def test_config_rejects_unknown_duplicate_and_bad_values(self):
         for text in (
             '{"force_unitt": "kN"}', '{"time_unit": "s", "time_unit": "ms"}',

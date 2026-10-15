@@ -16,8 +16,19 @@
     "delimiter": "comma",
     "skip_rows": 0,
     "decimal_separator": "dot",
-    "force_zero": 0.0,
-    "force_gain": 1.0
+    "force_zero": 0,
+    "force_gain": 1
+  },
+  "canonical_load_format": {
+    "time_column": "time_s",
+    "force_column": "force_n",
+    "time_unit": "s",
+    "force_unit": "N",
+    "delimiter": "comma",
+    "skip_rows": 0,
+    "decimal_separator": "dot",
+    "force_zero": 0,
+    "force_gain": 1
   },
   "load_summary": {
     "input_samples": 9,
