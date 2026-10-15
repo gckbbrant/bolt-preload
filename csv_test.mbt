@@ -1,4 +1,44 @@
 ///|
+test "canonical load CSV round trips complete finite samples" {
+  let samples : Array[@app.LoadSample] = [
+    { time_s: -1.0e250, force_n: 1.0e-250, },
+    { time_s: 0.0, force_n: 0.0, },
+    { time_s: 1.0e250, force_n: 1.0e250, },
+  ]
+  let csv = @app.loads_csv(samples).unwrap()
+  let restored = @app.parse_load_csv(csv).unwrap()
+  assert_eq(restored.length(), samples.length())
+  for i, sample in samples {
+    assert_eq(restored[i].time_s, sample.time_s)
+    assert_eq(restored[i].force_n, sample.force_n)
+  }
+  assert_eq(
+    @app.loads_csv([{ time_s: 0.0, force_n: 2.0, }]).unwrap(),
+    "time_s,force_n\n0,2\n",
+  )
+}
+
+///|
+test "canonical load export validates publicly constructed samples" {
+  assert_true(@app.loads_csv([]) is Err(_))
+  for value in [-1.0, @double.infinity, @double.not_a_number] {
+    assert_true(@app.loads_csv([{ time_s: 0.0, force_n: value, }]) is Err(_))
+  }
+  assert_true(
+    @app.loads_csv([{ time_s: @double.infinity, force_n: 0.0, }]) is Err(_),
+  )
+  for time in [0.0, -1.0] {
+    assert_true(
+      @app.loads_csv([
+        { time_s: 0.0, force_n: 0.0, },
+        { time_s: time, force_n: 1.0, },
+      ])
+      is Err(_),
+    )
+  }
+}
+
+///|
 test "CSV handles BOM and CRLF; ambiguous or invalid rows are rejected" {
   let loads = @app.parse_load_csv("\u{FEFF}time_s,force_n\r\n0,0\r\n1,5000\r\n").unwrap()
   assert_eq(loads.length(), 2)

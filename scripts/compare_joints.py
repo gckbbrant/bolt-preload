@@ -127,7 +127,7 @@ def compare(root, fatigue, profile_path, loads, sn, args):
     raw_inputs = {"profile": profile_path.read_bytes(), "loads": loads.read_bytes(), "sn": sn.read_bytes()}
     profile = json.loads(raw_inputs["profile"].decode("utf-8-sig"))
     sn_points = json.loads(raw_inputs["sn"].decode("utf-8-sig"))
-    bolt_cli, fatigue_cli = executable(root), executable(fatigue)
+    bolt_cli = executable(root)
     cases = {}
     with tempfile.TemporaryDirectory(prefix="joint-comparison-", dir=root / "_build") as directory:
         working = Path(directory)
@@ -135,6 +135,14 @@ def compare(root, fatigue, profile_path, loads, sn, args):
         snapshot_sn = working / "input-sn.json"
         snapshot_loads.write_bytes(raw_inputs["loads"])
         snapshot_sn.write_bytes(raw_inputs["sn"])
+        canonical_loads = working / "loads.csv"
+        summary_path = working / "load-summary.json"
+        run(bolt_cli, root, "normalize", snapshot_loads, "--csv", canonical_loads, "--json", summary_path,
+            "--time-column", args.time_column, "--force-column", args.force_column,
+            "--time-unit", args.time_unit, "--force-unit", args.force_unit, "--delimiter", args.delimiter,
+            "--skip-rows", args.skip_rows, "--decimal-separator", args.decimal_separator)
+        load_summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        fatigue_cli = executable(fatigue)
         for name, stiffness in (("stiff_joint", args.stiff_stiffness), ("soft_joint", args.soft_stiffness)):
             current = dict(profile, joint_stiffness_n_per_mm=stiffness)
             current_path = working / (name + ".json")
@@ -142,10 +150,7 @@ def compare(root, fatigue, profile_path, loads, sn, args):
             history_path = working / (name + "-history.json")
             fatigue_path = working / (name + "-fatigue.json")
             current_path.write_text(json.dumps(current, indent=2) + "\n", encoding="utf-8")
-            run(bolt_cli, root, "history", current_path, snapshot_loads, "--stress", stress_path, "--json", history_path,
-                "--time-column", args.time_column, "--force-column", args.force_column,
-                "--time-unit", args.time_unit, "--force-unit", args.force_unit, "--delimiter", args.delimiter,
-                "--skip-rows", args.skip_rows, "--decimal-separator", args.decimal_separator)
+            run(bolt_cli, root, "history", current_path, canonical_loads, "--stress", stress_path, "--json", history_path)
             run(fatigue_cli, fatigue, "analyze", stress_path, "--sn", snapshot_sn, "--bin-width", args.bin_width, "--json", fatigue_path)
             history = json.loads(history_path.read_text(encoding="utf-8"))
             spectrum = json.loads(fatigue_path.read_text(encoding="utf-8"))
@@ -173,6 +178,7 @@ def compare(root, fatigue, profile_path, loads, sn, args):
         "data_source": "samples/loads.csv: synthetic illustrative loads, not measured equipment data" if not args.input_loads_provided else str(loads),
         "sn_source": "fatigue-spectrum/samples/sn.json: illustrative N=1e10/amplitude^4, not certified material data" if not args.input_sn_provided else str(sn),
         "load_format": {key: getattr(args, key) for key in ("time_column", "force_column", "time_unit", "force_unit", "delimiter", "skip_rows", "decimal_separator")},
+        "load_summary": load_summary,
         "bin_width_mpa": args.bin_width,
         "sn_points": sn_points,
         "input_sha256": {key: hashlib.sha256(value).hexdigest() for key, value in raw_inputs.items()},

@@ -68,6 +68,20 @@ moon run --target native cmd/main -- history samples/joint.json samples/logger-l
 
 `--skip-rows` 指表头之前的物理行数，包含空行，默认 0；错误信息仍保留原文件行号。`--decimal-separator` 默认 `dot`，也可指定 `comma`；小数逗号配合分号、制表符或带引号字段使用。逗号模式中的 `1,25` 表示 1.25，混用小数点和数字分组会被拒绝。说明行和数值格式均由使用者指定。
 
+### 先确认输入，再复用标准载荷
+
+`normalize` 不需要连接配置。它使用与 `history` 相同的导入选项，检查整份记录并换算成 s、N：
+
+```sh
+moon run --target native cmd/main -- normalize samples/logger-loads.csv --time-column Clock --force-column Load --time-unit ms --force-unit kN --delimiter semicolon --skip-rows 2 --decimal-separator comma --csv _build/normalized-loads.csv --json _build/load-summary.json
+moon run --target native cmd/main -- history samples/joint.json _build/normalized-loads.csv --stress _build/normalized-stress.csv
+python scripts/compare_joints.py --loads _build/normalized-loads.csv --output _build/normalized-comparison.json
+```
+
+合成示例的摘要为 3 个样本、时间 0 至 2 s、载荷 0 至 5000 N。`--csv` 导出 `time_s,force_n`，后续使用默认导入参数即可，不再重复指定原文件的列、单位和说明行。`--json` 保存 `input_samples`、`time_start_s`、`time_end_s`、`minimum_force_n`、`maximum_force_n`。两个输出都可省略，此时只检查输入并打印摘要；指定输出的父目录须已存在。
+
+规范化保留全部样本、时间值及顺序，舍去其他列；不重采样、滤波、平移时间或校准传感器。通过只代表格式、数值和时间顺序有效，仍须由 `history` 检查具体连接的分离边界。源数据可以继续独立保存，标准 CSV 用于重复计算。输出覆盖保护和失败清除规则与分析命令一致。
+
 达到或超过 Fsep 时，单工况返回 `SeparationReached`；历史结果保留此前有效样本及首个分离位置，不再恢复后续分析，不导出完整应力文件。历史 JSON 的 `sample_index` 从 0 开始；未分离时可选 `separation` 字段省略。
 
 CLI 返回码：0 表示所请求计算完成，1 表示历史发生分离，2 表示输入、单工况模型或文件操作错误。输出路径不能覆盖输入或彼此重合；路径检查后会清除已存在的指定输出，避免失败后残留旧应力文件。
@@ -78,12 +92,14 @@ CLI 返回码：0 表示所请求计算完成，1 表示历史发生分离，2 �
 
 - `analyze_joint(profile, force)` 返回单工况结果或结构化错误。
 - `analyze_load_history(profile, loads)` 返回有效应力前缀与可选分离事件。
-- `parse_load_csv`、`stress_csv` 负责明确单位的文件交换。
+- `parse_load_csv`、`loads_csv`、`stress_csv` 负责明确单位的文件交换。
 - `render_svg` 生成载荷分配图。
 
 `parse_load_csv` 的可选参数 `time_column`、`force_column`、`delimiter` 可选择测量列，`time_scale`、`force_scale` 将输入乘到 s、N；默认比例均为 1。库调用者应依据输入单位提供有限正比例。
 
 同一 API 还可传 `skip_rows` 和 `decimal_comma`，默认分别为 0、false；这些选项与命令行使用同一解析过程。
+
+`loads_csv(samples)` 将公开的 `LoadSample` 数组序列化成标准载荷 CSV，独立于连接模型；空数组、非有限值、负载荷或不递增时间会返回错误。
 
 完整的独立调用示例位于 [examples/basic/main.mbt](examples/basic/main.mbt)：
 
@@ -130,6 +146,8 @@ python scripts/compare_joints.py --config samples/logger-comparison.json
 ```
 
 [这份配置](samples/logger-comparison.json)连接合成采集载荷与演示曲线。每次比较开始时分别读取载荷、参数和曲线一次，两个方案共用临时快照；运行期间原文件变化不影响本次比较。报告的 `input_sha256` 保存这三个原始文件字节的 SHA-256，可与保留的输入文件比对；换行符或 BOM 改变也会影响哈希。报告中的曲线点始终来自本次使用的快照。
+
+脚本先调用本项目的 `normalize` 检查并转换捕获的载荷，再构建疲劳工具；格式错误会在这一步停止。两种方案共用同一份标准载荷，不会再次套用原始单位或重复换算。报告的 `load_summary` 保存该输入的样本数、时间端点和 N 单位载荷范围；`load_format` 与 `input_sha256` 仍描述原始输入。只更新本项目即可使用此流程，疲劳工具继续通过标准应力 CSV 配套。
 
 两种方案都在分离前且曲线完整覆盖时才生成比较 JSON；任一失败返回 2，并清除指定路径的旧比较文件。输出不能覆盖三个输入文件。恒定载荷下两者的循环损伤都为零，此时 `soft_to_stiff_damage_ratio` 为 `null`，不把未定义的损伤比写成零。比较报告保存实际命令、数据路径、采用的参数与曲线；输入路径不代表数据已经过测量或材料认证。
 

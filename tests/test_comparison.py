@@ -113,6 +113,7 @@ class PairedComparison(unittest.TestCase):
         self.assertEqual(report["load_format"]["force_unit"], "kN")
         self.assertEqual(report["load_format"]["skip_rows"], 2)
         self.assertEqual(report["load_format"]["decimal_separator"], "comma")
+        self.assertEqual(report["load_summary"], {"input_samples": 3, "time_start_s": 0, "time_end_s": 2, "minimum_force_n": 0, "maximum_force_n": 5000})
         self.assertEqual(report["data_source"], str(self.loads))
 
     def test_config_rejects_unknown_duplicate_and_bad_values(self):
@@ -156,6 +157,18 @@ class PairedComparison(unittest.TestCase):
         self.assertEqual(report["cases"]["soft_joint"]["maximum_stress_mpa"], 240)
         self.assertEqual(report["sn_points"], json.loads(original["sn"].decode("utf-8")))
         self.assertEqual(report["input_sha256"], {key: hashlib.sha256(value).hexdigest() for key, value in original.items()})
+
+    def test_invalid_loads_stop_before_building_the_fatigue_tool(self):
+        spec = importlib.util.spec_from_file_location("paired_script", ROOT / "scripts/compare_joints.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        args = argparse.Namespace(config=None, profile=self.profile, loads=self.loads, sn=self.sn, fatigue=FATIGUE, output=self.output)
+        module.configuration(args, ROOT)
+        self.loads.write_text("time_s,force_n\n0,0\n0,5000\n", encoding="utf-8")
+        with mock.patch.object(module, "executable", wraps=module.executable) as build:
+            with self.assertRaisesRegex(RuntimeError, "line 3"):
+                module.compare(ROOT, FATIGUE, self.profile, self.loads, self.sn, args)
+        self.assertEqual(build.call_args_list, [mock.call(ROOT)])
 
 
 if __name__ == "__main__":

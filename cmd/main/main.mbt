@@ -19,24 +19,6 @@ fn optional(values : Map[String, Array[String]], key : String) -> String? raise 
 }
 
 ///|
-async fn output_identity(path : String) -> String {
-  if @fs.exists(path) {
-    return @fs.realpath(path).replace(old="\\", new="/").to_lower()
-  }
-  let parts = path.replace(old="\\", new="/").split("/").collect()
-  let name = parts[parts.length() - 1]
-  if name.is_empty() {
-    fail("output must name a file")
-  }
-  let parent = if parts.length() == 1 {
-    "."
-  } else {
-    parts[:parts.length() - 1].join("/")
-  }
-  (@fs.realpath(parent).replace(old="\\", new="/") + "/" + name.to_owned()).to_lower()
-}
-
-///|
 async fn run() -> Unit {
   let single = @argparse.Command(
     "analyze",
@@ -52,6 +34,18 @@ async fn run() -> Unit {
       @argparse.OptionArg("svg", about="Write force distribution SVG."),
     ],
   )
+  let history_options = measurement_options()
+  history_options.append([
+    @argparse.OptionArg(
+      "stress",
+      about="Write a complete time_s,stress_mpa CSV.",
+    ),
+    @argparse.OptionArg(
+      "json",
+      about="Write history JSON, including any separation event.",
+    ),
+    @argparse.OptionArg("svg", about="Write force distribution SVG."),
+  ])
   let history = @argparse.Command(
     "history",
     about="Convert a load CSV to bolt stress before separation.",
@@ -59,55 +53,21 @@ async fn run() -> Unit {
       @argparse.PositionArg("profile"),
       @argparse.PositionArg("loads"),
     ],
-    options=[
-      @argparse.OptionArg(
-        "stress",
-        about="Write a complete time_s,stress_mpa CSV.",
-      ),
-      @argparse.OptionArg(
-        "json",
-        about="Write history JSON, including any separation event.",
-      ),
-      @argparse.OptionArg("svg", about="Write force distribution SVG."),
-      @argparse.OptionArg(
-        "time-column",
-        about="Time column name; default time_s.",
-      ),
-      @argparse.OptionArg(
-        "force-column",
-        about="Force column name; default force_n.",
-      ),
-      @argparse.OptionArg(
-        "time-unit",
-        about="Input time unit: s or ms; default s.",
-      ),
-      @argparse.OptionArg(
-        "force-unit",
-        about="Input force unit: N or kN; default N.",
-      ),
-      @argparse.OptionArg(
-        "delimiter",
-        about="CSV separator: comma, semicolon or tab.",
-      ),
-      @argparse.OptionArg(
-        "skip-rows",
-        about="Physical preamble lines before header; default 0.",
-      ),
-      @argparse.OptionArg(
-        "decimal-separator",
-        about="Input decimal separator: dot or comma; default dot.",
-      ),
-    ],
+    options=history_options,
   )
   let command = @argparse.Command(
     "bolt-preload",
     about="Axial preloaded bolt joint calculations.",
-    subcommands=[single, history],
+    subcommands=[single, history, normalization_command()],
     subcommand_required=true,
   )
   let matches = command.parse()
   guard matches.subcommand is Some((name, args)) else {
-    fail("expected analyze or history")
+    fail("expected analyze, history or normalize")
+  }
+  if name == "normalize" {
+    normalize_input(args.values)
+    return
   }
   let profile_path = required(args.values, "profile")
   let loads_path = optional(args.values, "loads")
@@ -118,28 +78,8 @@ async fn run() -> Unit {
   if loads_path is Some(path) {
     inputs.push(path)
   }
-  let input_ids : Array[String] = []
-  for path in inputs {
-    input_ids.push(@fs.realpath(path).replace(old="\\", new="/").to_lower())
-  }
   let outputs = [json_path, svg_path, stress_path].filter_map(fn(x) { x })
-  let output_ids : Array[String] = []
-  for path in outputs {
-    let id = output_identity(path)
-    if input_ids.contains(id) {
-      fail("output must not overwrite an input: \{path}")
-    }
-    if output_ids.contains(id) {
-      fail("output paths must be distinct")
-    }
-    output_ids.push(id)
-  }
-  // Clear old exports so failed analysis cannot leave stale fatigue data.
-  for path in outputs {
-    if @fs.exists(path) {
-      @fs.remove(path)
-    }
-  }
+  prepare_outputs(inputs, outputs)
   let profile : @app.JointProfile = @json.from_json(
     @json.parse(@fs.read_file(profile_path).text()),
   )
@@ -161,20 +101,7 @@ async fn run() -> Unit {
       )
     }
   } else {
-    let loads = match
-      @app.parse_load_csv(
-        @fs.read_file(required(args.values, "loads")).text(),
-        time_column=optional(args.values, "time-column").unwrap_or("time_s"),
-        force_column=optional(args.values, "force-column").unwrap_or("force_n"),
-        time_scale=input_time_scale(args.values),
-        force_scale=input_force_scale(args.values),
-        delimiter=input_delimiter(args.values),
-        skip_rows=input_skip_rows(args.values),
-        decimal_comma=input_decimal_comma(args.values),
-      ) {
-      Ok(value) => value
-      Err(error) => fail(@json.to_json(error).stringify())
-    }
+    let loads = read_measurements(required(args.values, "loads"), args.values)
     let result = match @app.analyze_load_history(profile, loads) {
       Ok(value) => value
       Err(error) => fail(@json.to_json(error).stringify())

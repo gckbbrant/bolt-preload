@@ -155,3 +155,24 @@ pub fn stress_csv(history : HistoryResult) -> Result[String, JointError] {
   }
   Ok(output.to_string())
 }
+
+///|
+/// Serialize a complete, ordered history in canonical s and N units.
+/// Reject empty histories, invalid numbers and non-increasing timestamps.
+pub fn loads_csv(samples : ArrayView[LoadSample]) -> Result[String, JointError] {
+  if samples.is_empty() {
+    return Err(InvalidInput("CSV requires at least one sample"))
+  }
+  let output = StringBuilder()
+  output.write_string("time_s,force_n\n")
+  for i, sample in samples {
+    if !finite(sample.time_s) || !finite(sample.force_n) || sample.force_n < 0.0 {
+      return Err(InvalidInput("sample \{i}: invalid force or time"))
+    }
+    if i > 0 && sample.time_s <= samples[i - 1].time_s {
+      return Err(InvalidInput("sample \{i}: timestamps must strictly increase"))
+    }
+    output.write_string("\{sample.time_s},\{sample.force_n}\n")
+  }
+  Ok(output.to_string())
+}

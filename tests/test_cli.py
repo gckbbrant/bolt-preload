@@ -25,6 +25,45 @@ class JointCLI(unittest.TestCase):
     def run_cli(self, *args):
         return subprocess.run([str(self.binary)] + [str(a) for a in args], cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace")
 
+    def test_normalize_logger_can_be_reused_without_import_options(self):
+        canonical, summary, stress = (self.path / n for n in ("loads.csv", "summary.json", "stress.csv"))
+        p = self.run_cli("normalize", "samples/logger-loads.csv", "--time-column", "Clock", "--force-column", "Load", "--time-unit", "ms", "--force-unit", "kN", "--delimiter", "semicolon", "--skip-rows", "2", "--decimal-separator", "comma", "--csv", canonical, "--json", summary)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(canonical.read_text(encoding="utf-8"), "time_s,force_n\n0,0\n1,5000\n2,0\n")
+        self.assertEqual(json.loads(summary.read_text(encoding="utf-8")), {"input_samples": 3, "time_start_s": 0, "time_end_s": 2, "minimum_force_n": 0, "maximum_force_n": 5000})
+        p = self.run_cli("history", "samples/joint.json", canonical, "--stress", stress)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(stress.read_text(encoding="utf-8"), "time_s,stress_mpa\n0,200\n1,220\n2,200\n")
+
+    def test_normalize_checks_input_without_a_joint_model(self):
+        p = self.run_cli("normalize", "samples/separated.csv")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("Samples:", p.stdout)
+
+    def test_normalize_preserves_inputs_and_rejects_shared_outputs(self):
+        source = self.path / "loads.csv"
+        original = (ROOT / "samples/loads.csv").read_bytes()
+        source.write_bytes(original)
+        p = self.run_cli("normalize", source, "--csv", str(source.parent) + "/./" + source.name)
+        self.assertEqual(p.returncode, 2, p.stderr)
+        self.assertEqual(source.read_bytes(), original)
+        output = self.path / "result.csv"
+        output.write_text("existing", encoding="utf-8")
+        p = self.run_cli("normalize", source, "--csv", output, "--json", output)
+        self.assertEqual(p.returncode, 2, p.stderr)
+        self.assertEqual(output.read_text(encoding="utf-8"), "existing")
+
+    def test_normalize_invalid_source_clears_both_old_exports(self):
+        source, csv, summary = (self.path / n for n in ("bad.csv", "loads.csv", "summary.json"))
+        source.write_text("metadata\ntime_s,force_n\n0,0\n1,-1\n", encoding="utf-8")
+        for path in (csv, summary):
+            path.write_text("stale", encoding="utf-8")
+        p = self.run_cli("normalize", source, "--skip-rows", "1", "--csv", csv, "--json", summary)
+        self.assertEqual(p.returncode, 2, p.stderr)
+        self.assertIn("line 4", p.stderr)
+        self.assertFalse(csv.exists())
+        self.assertFalse(summary.exists())
+
     def test_hand_calculation(self):
         result = self.path / "result.json"
         p = self.run_cli("analyze", "samples/joint.json", "--force", "5000", "--json", result)
