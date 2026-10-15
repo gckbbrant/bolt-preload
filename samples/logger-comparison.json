@@ -1,0 +1,14 @@
+{
+  "profile": "joint.json",
+  "loads": "logger-loads.csv",
+  "fatigue": "../../fatigue-spectrum",
+  "sn": "../../fatigue-spectrum/samples/sn.json",
+  "time_column": "Clock",
+  "force_column": "Load",
+  "time_unit": "ms",
+  "force_unit": "kN",
+  "delimiter": "semicolon",
+  "skip_rows": 2,
+  "decimal_separator": "comma",
+  "output": "../_build/logger-comparison.json"
+}

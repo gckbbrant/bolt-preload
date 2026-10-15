@@ -30,4 +30,5 @@ jobs:
           (cd _build/fatigue-spectrum && moon update)
           python3 scripts/compare_joints.py --fatigue _build/fatigue-spectrum --output _build/comparison.json
           python3 scripts/compare_joints.py --config samples/comparison-config.json --fatigue _build/fatigue-spectrum --sn _build/fatigue-spectrum/samples/sn.json --output _build/config-comparison.json
+          python3 scripts/compare_joints.py --config samples/logger-comparison.json --fatigue _build/fatigue-spectrum --sn _build/fatigue-spectrum/samples/sn.json --output _build/logger-comparison.json
           FATIGUE_PROJECT=_build/fatigue-spectrum python3 tests/test_comparison.py
