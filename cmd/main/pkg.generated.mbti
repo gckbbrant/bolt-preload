@@ -6,6 +6,7 @@ package "gckbbrant/bolt-preload/cmd/main"
 // Errors
 
 // Types and methods
+type InputSummary derive(ToJson)
 
 // Type aliases
 

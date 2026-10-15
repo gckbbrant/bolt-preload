@@ -46,3 +46,22 @@ fn input_decimal_comma(values : Map[String, Array[String]]) -> Bool raise {
     _ => fail("decimal-separator must be dot or comma")
   }
 }
+
+///|
+fn measurement_options() -> Array[@argparse.OptionArg] {
+  [
+    OptionArg("time-column", about="Time column name; default time_s."),
+    OptionArg("force-column", about="Force column name; default force_n."),
+    OptionArg("time-unit", about="Input time unit: s or ms; default s."),
+    OptionArg("force-unit", about="Input force unit: N or kN; default N."),
+    OptionArg("delimiter", about="CSV separator: comma, semicolon or tab."),
+    OptionArg(
+      "skip-rows",
+      about="Physical preamble lines before header; default 0.",
+    ),
+    OptionArg(
+      "decimal-separator",
+      about="Input decimal separator: dot or comma; default dot.",
+    ),
+  ]
+}

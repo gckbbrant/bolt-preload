@@ -6,4 +6,5 @@ import {
 
 import {
   "gckbbrant/bolt-preload" @app,
+  "moonbitlang/core/double",
 } for "test"
