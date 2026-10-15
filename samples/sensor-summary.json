@@ -1,0 +1,29 @@
+{
+  "input_samples": 3,
+  "time_start_s": 0,
+  "time_end_s": 2,
+  "minimum_force_n": 0,
+  "maximum_force_n": 5000,
+  "source_format": {
+    "time_column": "Clock",
+    "force_column": "Bridge",
+    "time_unit": "ms",
+    "force_unit": "kN",
+    "delimiter": "semicolon",
+    "skip_rows": 1,
+    "decimal_separator": "comma",
+    "force_zero": 2.5,
+    "force_gain": -5
+  },
+  "canonical_format": {
+    "time_column": "time_s",
+    "force_column": "force_n",
+    "time_unit": "s",
+    "force_unit": "N",
+    "delimiter": "comma",
+    "skip_rows": 0,
+    "decimal_separator": "dot",
+    "force_zero": 0,
+    "force_gain": 1
+  }
+}
