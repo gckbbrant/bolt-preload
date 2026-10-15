@@ -25,6 +25,43 @@ class JointCLI(unittest.TestCase):
     def run_cli(self, *args):
         return subprocess.run([str(self.binary)] + [str(a) for a in args], cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace")
 
+    def test_sensor_calibration_matches_direct_and_reusable_history(self):
+        source, canonical, direct, reused = (self.path / n for n in ("sensor.csv", "loads.csv", "direct.csv", "reused.csv"))
+        source.write_text("sensor export\nClock;Bridge\n0,0;2,5\n1000,0;1,5\n2000,0;2,5\n", encoding="utf-8")
+        options = ["--time-column", "Clock", "--force-column", "Bridge", "--time-unit", "ms", "--force-unit", "kN", "--delimiter", "semicolon", "--skip-rows", "1", "--decimal-separator", "comma", "--force-zero", "2.5", "--force-gain", "-5"]
+        p = self.run_cli("normalize", source, *options, "--csv", canonical)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(canonical.read_text(encoding="utf-8"), "time_s,force_n\n0,0\n1,5000\n2,0\n")
+        p = self.run_cli("history", "samples/joint.json", source, *options, "--stress", direct)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        p = self.run_cli("history", "samples/joint.json", canonical, "--stress", reused)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(direct.read_bytes(), reused.read_bytes())
+        self.assertEqual(direct.read_text(encoding="utf-8"), "time_s,stress_mpa\n0,200\n1,220\n2,200\n")
+        source.write_text("time_s,force_n\n0,-3\n1,-2\n", encoding="utf-8")
+        p = self.run_cli("normalize", source, "--force-zero", "-3", "--force-gain", "5", "--csv", canonical)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(canonical.read_text(encoding="utf-8"), "time_s,force_n\n0,0\n1,5\n")
+
+    def test_invalid_calibration_clears_old_export(self):
+        source, output = self.path / "sensor.csv", self.path / "loads.csv"
+        source.write_text("time_s,force_n\n0,1\n", encoding="utf-8")
+        for option, value in (("--force-gain", "0"), ("--force-gain", "nan"), ("--force-gain", "inf"), ("--force-zero", "nan"), ("--force-zero", "inf")):
+            output.write_text("stale", encoding="utf-8")
+            p = self.run_cli("normalize", source, option, value, "--csv", output)
+            self.assertEqual(p.returncode, 2, p.stderr)
+            self.assertFalse(output.exists())
+
+    def test_calibrated_negative_force_is_rejected_at_source_line(self):
+        source, output = self.path / "sensor.csv", self.path / "loads.csv"
+        source.write_text("metadata\ntime_s,force_n\n0,2.5\n1,1.5\n", encoding="utf-8")
+        output.write_text("stale", encoding="utf-8")
+        p = self.run_cli("normalize", source, "--skip-rows", "1", "--force-zero", "2.5", "--force-gain", "5", "--csv", output)
+        self.assertEqual(p.returncode, 2, p.stderr)
+        self.assertIn("line 4", p.stderr)
+        self.assertIn("nonnegative", p.stderr)
+        self.assertFalse(output.exists())
+
     def test_normalize_logger_can_be_reused_without_import_options(self):
         canonical, summary, stress = (self.path / n for n in ("loads.csv", "summary.json", "stress.csv"))
         p = self.run_cli("normalize", "samples/logger-loads.csv", "--time-column", "Clock", "--force-column", "Load", "--time-unit", "ms", "--force-unit", "kN", "--delimiter", "semicolon", "--skip-rows", "2", "--decimal-separator", "comma", "--csv", canonical, "--json", summary)

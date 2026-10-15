@@ -1,0 +1,5 @@
+Synthetic bridge channel in V; zero 2.5 V; sensitivity -5 kN/V
+Clock;Bridge
+0,0;2,5
+1000,0;1,5
+2000,0;2,5

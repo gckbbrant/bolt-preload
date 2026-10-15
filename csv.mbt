@@ -1,5 +1,6 @@
 ///|
 /// Read selected measurement columns, converting explicitly to canonical units.
+/// Calibration is (reading - force_zero) * force_gain, then the unit scale.
 /// Other columns are ignored; every row must match the complete header width.
 pub fn parse_load_csv(
   text : StringView,
@@ -10,6 +11,8 @@ pub fn parse_load_csv(
   delimiter? : String = ",",
   skip_rows? : Int = 0,
   decimal_comma? : Bool = false,
+  force_zero? : Double = 0.0,
+  force_gain? : Double = 1.0,
 ) -> Result[Array[LoadSample], JointError] {
   if skip_rows < 0 {
     return Err(InvalidInput("skip_rows must be nonnegative"))
@@ -26,6 +29,13 @@ pub fn parse_load_csv(
     !finite(force_scale) ||
     force_scale <= 0.0 {
     return Err(InvalidInput("unit scales must be finite and positive"))
+  }
+  if !finite(force_zero) || !finite(force_gain) || force_gain == 0.0 {
+    return Err(
+      InvalidInput(
+        "calibration zero must be finite; gain must be finite and nonzero",
+      ),
+    )
   }
   let samples : Array[LoadSample] = []
   let mut columns : (Int, Int)? = None
@@ -84,24 +94,38 @@ pub fn parse_load_csv(
       _ =>
         return Err(InvalidInput("CSV line \{index + 1}: invalid force number"))
     }
-    let sample : LoadSample = {
-      time_s: time * time_scale,
-      force_n: value * force_scale,
+    if !finite(time) || !finite(value) {
+      return Err(InvalidInput("CSV line \{index + 1}: values must be finite"))
     }
-    if !finite(time) || !finite(value) || value < 0.0 {
+    let shifted = value - force_zero
+    let calibrated = if shifted == 0.0 { 0.0 } else { shifted * force_gain }
+    if !finite(shifted) ||
+      !finite(calibrated) ||
+      (shifted != 0.0 && calibrated == 0.0) {
       return Err(
         InvalidInput(
-          "CSV line \{index + 1}: values must be finite and force nonnegative",
+          "CSV line \{index + 1}: sensor calibration cannot be represented",
         ),
       )
+    }
+    let sample : LoadSample = {
+      time_s: time * time_scale,
+      force_n: calibrated * force_scale,
     }
     if !finite(sample.time_s) ||
       !finite(sample.force_n) ||
       (time != 0.0 && sample.time_s == 0.0) ||
-      (value != 0.0 && sample.force_n == 0.0) {
+      (calibrated != 0.0 && sample.force_n == 0.0) {
       return Err(
         InvalidInput(
           "CSV line \{index + 1}: unit conversion cannot be represented",
+        ),
+      )
+    }
+    if sample.force_n < 0.0 {
+      return Err(
+        InvalidInput(
+          "CSV line \{index + 1}: calibrated force must be nonnegative",
         ),
       )
     }

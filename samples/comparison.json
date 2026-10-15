@@ -15,7 +15,9 @@
     "force_unit": "N",
     "delimiter": "comma",
     "skip_rows": 0,
-    "decimal_separator": "dot"
+    "decimal_separator": "dot",
+    "force_zero": 0.0,
+    "force_gain": 1.0
   },
   "load_summary": {
     "input_samples": 9,

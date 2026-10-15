@@ -13,7 +13,7 @@ pub fn analyze_load_history(JointProfile, ArrayView[LoadSample]) -> Result[Histo
 
 pub fn loads_csv(ArrayView[LoadSample]) -> Result[String, JointError]
 
-pub fn parse_load_csv(StringView, time_column? : String, force_column? : String, time_scale? : Double, force_scale? : Double, delimiter? : String, skip_rows? : Int, decimal_comma? : Bool) -> Result[Array[LoadSample], JointError]
+pub fn parse_load_csv(StringView, time_column? : String, force_column? : String, time_scale? : Double, force_scale? : Double, delimiter? : String, skip_rows? : Int, decimal_comma? : Bool, force_zero? : Double, force_gain? : Double) -> Result[Array[LoadSample], JointError]
 
 pub fn render_svg(JointProfile) -> Result[String, JointError]
 
