@@ -11,6 +11,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+from contextlib import nullcontext
 from pathlib import Path
 
 LOAD_OPTIONS = (
@@ -84,7 +85,7 @@ def configuration(args, root):
         "skip_rows": 0, "decimal_separator": "dot",
         "force_zero": 0, "force_gain": 1,
     }
-    paths = {"profile", "loads", "sn", "fatigue", "output", "input_config"}
+    paths = {"profile", "loads", "sn", "fatigue", "output", "input_config", "bundle"}
     config_path = args.config.resolve() if args.config else None
     supplied = {}
     if config_path is not None:
@@ -105,17 +106,24 @@ def configuration(args, root):
             if key in paths:
                 if not isinstance(value, str) or not value.strip():
                     raise ValueError(key + " must be a nonempty file or directory path")
-                settings[key] = (config_path.parent / value).resolve()
+                location = config_path.parent / value
+                settings[key] = Path(os.path.abspath(location)) if key == "bundle" else location.resolve()
             else:
                 settings[key] = value
     explicit_load_options = set(supplied) & set(LOAD_OPTIONS)
     for key in paths | set(settings):
         value = getattr(args, key, None)
         if value is not None:
-            settings[key] = value.resolve() if key in paths and key != "output" else value
+            if key == "bundle":
+                settings[key] = Path(os.path.abspath(value))
+            else:
+                settings[key] = value.resolve() if key in paths and key != "output" else value
             if key in LOAD_OPTIONS:
                 explicit_load_options.add(key)
     args.input_config = settings.get("input_config")
+    args.bundle = settings.get("bundle")
+    if args.bundle is not None and (args.output is not None or "output" in supplied):
+        raise ValueError("bundle and output are mutually exclusive; the report belongs inside the bundle")
     for key in ("stiff_stiffness", "soft_stiffness", "bin_width"):
         value = settings[key]
         if isinstance(value, bool) or not isinstance(value, (int, float)):
@@ -153,7 +161,7 @@ def configuration(args, root):
     )
 
 
-def compare(root, fatigue, profile_path, loads, sn, args):
+def compare(root, fatigue, profile_path, loads, sn, args, artifacts=None):
     raw_inputs = {"profile": profile_path.read_bytes(), "loads": loads.read_bytes(), "sn": sn.read_bytes()}
     if args.input_config is not None:
         raw_inputs["input_config"] = args.input_config.read_bytes()
@@ -161,10 +169,11 @@ def compare(root, fatigue, profile_path, loads, sn, args):
     sn_points = json.loads(raw_inputs["sn"].decode("utf-8-sig"))
     bolt_cli = executable(root)
     cases = {}
-    with tempfile.TemporaryDirectory(prefix="joint-comparison-", dir=root / "_build") as directory:
+    workspace = nullcontext(artifacts) if artifacts is not None else tempfile.TemporaryDirectory(prefix="joint-comparison-", dir=root / "_build")
+    with workspace as directory:
         working = Path(directory)
         snapshot_loads = working / "input-loads.csv"
-        snapshot_sn = working / "input-sn.json"
+        snapshot_sn = working / "sn.json"
         snapshot_loads.write_bytes(raw_inputs["loads"])
         snapshot_sn.write_bytes(raw_inputs["sn"])
         canonical_loads = working / "loads.csv"
@@ -187,13 +196,18 @@ def compare(root, fatigue, profile_path, loads, sn, args):
             stress_path = working / (name + "-stress.csv")
             history_path = working / (name + "-history.json")
             fatigue_path = working / (name + "-fatigue.json")
+            cycles_path = working / (name + "-cycles.csv")
             current_path.write_text(json.dumps(current, indent=2) + "\n", encoding="utf-8")
             run(bolt_cli, root, "history", current_path, canonical_loads, "--stress", stress_path, "--json", history_path)
-            run(fatigue_cli, fatigue, "analyze", stress_path, "--sn", snapshot_sn, "--bin-width", args.bin_width, "--json", fatigue_path)
+            cycle_options = ["--cycles", cycles_path] if artifacts is not None else []
+            run(fatigue_cli, fatigue, "analyze", stress_path, "--sn", snapshot_sn, "--bin-width", args.bin_width, "--json", fatigue_path, *cycle_options)
             history = json.loads(history_path.read_text(encoding="utf-8"))
             spectrum = json.loads(fatigue_path.read_text(encoding="utf-8"))
             if history.get("separation") is not None or spectrum["damage"].get("total_damage") is None:
                 raise RuntimeError("comparison is outside the selected model or S-N coverage")
+            if artifacts is not None:
+                spectrum["input_file"] = stress_path.name
+                write_report(fatigue_path, spectrum)
             cases[name] = {
                 "profile": current,
                 "load_fraction": history["load_fraction"],
@@ -205,6 +219,10 @@ def compare(root, fatigue, profile_path, loads, sn, args):
                 "spectrum": spectrum["spectrum"],
                 "damage": spectrum["damage"],
             }
+        if artifacts is not None:
+            snapshot_loads.unlink()
+            if args.input_config is not None:
+                snapshot_config.unlink()
     stiff_damage = cases["stiff_joint"]["damage"]["total_damage"]
     soft_damage = cases["soft_joint"]["damage"]["total_damage"]
     ratio = soft_damage / stiff_damage if stiff_damage > 0 else None
@@ -228,6 +246,60 @@ def compare(root, fatigue, profile_path, loads, sn, args):
     }
 
 
+def write_bundle(root, fatigue, profile_path, loads, sn, args):
+    target = args.bundle
+    # Check again at commit time: never merge artifacts into an existing result.
+    if target.exists() or target.is_symlink():
+        raise ValueError("bundle target already exists: " + str(target))
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".joint-bundle-", dir=target.parent) as directory:
+        staging = Path(directory)
+        report = compare(root, fatigue, profile_path, loads, sn, args, artifacts=staging)
+        report.pop("command")
+        report.pop("command_argv")
+        report["data_source"] = "Original load bytes are not included; see input_sha256.loads."
+        report["sn_source"] = "sn.json"
+        write_report(staging / "comparison.json", report)
+        files = []
+        roles = [("loads.csv", "loads", None, {"time_s": "s", "force_n": "N"}),
+                 ("load-summary.json", "load_summary", None, None),
+                 ("sn.json", "sn_curve", None, {"amplitude_mpa": "MPa", "cycles_to_failure": "cycles"}),
+                 ("comparison.json", "comparison", None, None)]
+        for case in report["cases"]:
+            roles += [(case + ".json", "profile", case, None),
+                      (case + "-stress.csv", "stress", case, {"time_s": "s", "stress_mpa": "MPa"}),
+                      (case + "-cycles.csv", "cycles", case, {"range_mpa": "MPa", "mean_mpa": "MPa", "count": "cycles", "start_index": "sample_index", "end_index": "sample_index"}),
+                      (case + "-history.json", "history", case, None),
+                      (case + "-fatigue.json", "fatigue", case, None)]
+        for name, role, case, units in roles:
+            entry = {"path": name, "role": role, "sha256": hashlib.sha256((staging / name).read_bytes()).hexdigest()}
+            if case is not None:
+                entry["case"] = case
+            if units is not None:
+                entry["units"] = units
+            files.append(entry)
+        write_report(staging / "manifest.json", {
+            "schema_version": 1, "kind": "joint-comparison", "status": "complete",
+            "bin_width_mpa": args.bin_width, "mean_stress_model": "none",
+            "source_input_sha256": report["input_sha256"], "files": files,
+        })
+        # Reserve exclusively on both Windows and POSIX. Publish the completeness
+        # marker last; an interrupted transfer cannot look like a complete bundle.
+        target.mkdir()
+        published = []
+        try:
+            for name in [entry["path"] for entry in files] + ["manifest.json"]:
+                destination = target / name
+                (staging / name).replace(destination)
+                published.append(destination)
+        except OSError:
+            for destination in reversed(published):
+                destination.unlink()
+            target.rmdir()  # Only the directory reserved by this call, never recursive.
+            raise
+    return report
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, help="comparison JSON; its paths are relative to the config file; explicit options override it")
@@ -249,6 +321,7 @@ def main():
     parser.add_argument("--skip-rows", type=nonnegative, help="physical lines before the CSV header; default 0")
     parser.add_argument("--decimal-separator", choices=("dot", "comma"), help="input decimal separator; default dot")
     parser.add_argument("--output", type=Path, help="report path; default _build/comparison.json")
+    parser.add_argument("--bundle", type=Path, help="new portable result directory, relative to the calling directory; incompatible with --output")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     try:
@@ -258,14 +331,24 @@ def main():
     inputs = [profile_path, loads, sn] + ([config_path] if config_path else [])
     if args.input_config is not None:
         inputs.append(args.input_config)
-    for input_path in inputs:
-        if output.resolve() == input_path.resolve() or (output.exists() and input_path.exists() and output.samefile(input_path)):
-            parser.error("output must not overwrite an input: " + str(input_path))
+    if args.bundle is None:
+        for input_path in inputs:
+            if output.resolve() == input_path.resolve() or (output.exists() and input_path.exists() and output.samefile(input_path)):
+                parser.error("output must not overwrite an input: " + str(input_path))
+    else:
+        target = args.bundle.resolve()
+        for input_path in inputs + [root, fatigue]:
+            resolved = input_path.resolve()
+            if target == resolved or target in resolved.parents:
+                parser.error("bundle must not contain or replace an input or project: " + str(input_path))
     try:
-        if output.exists():
-            output.unlink()
-        report = compare(root, fatigue, profile_path, loads, sn, args)
-        write_report(output, report)
+        if args.bundle is not None:
+            report = write_bundle(root, fatigue, profile_path, loads, sn, args)
+        else:
+            if output.exists():
+                output.unlink()
+            report = compare(root, fatigue, profile_path, loads, sn, args)
+            write_report(output, report)
     except (OSError, ValueError, TypeError, KeyError, RuntimeError, subprocess.CalledProcessError) as error:
         parser.exit(2, "compare_joints: {}\n".format(error))
     for name, result in report["cases"].items():
