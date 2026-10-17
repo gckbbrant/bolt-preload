@@ -196,7 +196,30 @@ python scripts/compare_joints.py --config samples/preset-comparison.json --force
 
 两次比较的峰值外载分别为 4000 N 和 3000 N。配置内 `input_config` 路径相对比较配置目录，显式 `--input-config` 路径相对调用目录。报告 `load_format` 直接采用原生规范化过程返回的实际参数，`canonical_load_format` 说明两种方案共用的标准载荷格式，`load_summary` 继续保留原统计字段。输入配置同样先捕获字节快照，哈希记录在 `input_sha256.input_config`，运行中修改原配置不影响两个方案。输出也不能覆盖该配置。
 
-两种方案都在分离前且曲线完整覆盖时才生成比较 JSON；任一失败返回 2，并清除指定路径的旧比较文件。输出不能覆盖三个输入文件。恒定载荷下两者的循环损伤都为零，此时 `soft_to_stiff_damage_ratio` 为 `null`，不把未定义的损伤比写成零。比较报告保存实际命令、数据路径、采用的参数与曲线；输入路径不代表数据已经过测量或材料认证。
+两种方案都在分离前且曲线完整覆盖时才生成比较 JSON；任一失败返回 2，并清除指定路径的旧比较文件。输出不能覆盖输入文件。恒定载荷下两者的循环损伤都为零，此时 `soft_to_stiff_damage_ratio` 为 `null`，不把未定义的损伤比写成零。单 JSON 比较报告保存实际命令、数据路径、采用的参数与曲线；输入路径不代表数据已经过测量或材料认证。
+
+### 保存可搬移的比较结果
+
+需要保留标准载荷、应力和循环记录时，使用 `--bundle` 指定一个尚不存在的目录：
+
+```sh
+python scripts/compare_joints.py --bundle _build/portable-default
+python scripts/compare_joints.py --config samples/bundle-comparison.json
+```
+
+第一行使用原合成载荷；第二行使用同一组传感器合成输入、采集预设和 -4 增益，峰值为 4000 N。两条命令的目标不同；重复运行须另选新目录。显式 `--bundle` 路径相对于调用目录，比较 JSON 的 `bundle` 相对于配置目录。`bundle` 与显式 `output`/`--output` 互斥，唯一的比较报告写在包内，原单 JSON 用法保持不变。
+
+目录中有标准 `loads.csv`、转换摘要、捕获的 `sn.json`、两种方案各自的接头参数/标准应力/未分箱循环/历史及疲劳 JSON，以及 `comparison.json` 和 `manifest.json`。共 14 个数据文件及一个版本化清单；每个数据文件的角色、方案、SHA-256 和 CSV 单位见[结果包格式](docs/result-bundle.md)。原采集文件和采集预设不随包另存，转换参数和原始输入哈希仍保留；原始输入哈希与包内文件哈希分别记录。包内报告不保存原调用命令和临时绝对路径，路径均可随目录搬移。
+
+可把整个目录复制或移动到其他位置，使用独立的 fatigue-spectrum 原生命令复用其中的循环，无需原采集文件或重新标定：
+
+```sh
+moon -C ../fatigue-spectrum run --target native cmd/main -- from-cycles ../bolt-preload/_build/portable-default/stiff_joint-cycles.csv --sn ../bolt-preload/_build/portable-default/sn.json --json ../bolt-preload/_build/stiff-reused.json
+```
+
+这里的输入与输出路径由原生命令在 fatigue-spectrum 项目目录下解析。该命令直接读 CSV；需要先验证整个结果包时，可使用 fatigue-spectrum 的 `scripts/reanalyze_cycles.py --bundle ... --case stiff_joint --output ...`。两个项目仍通过普通 CSV 配套。
+
+计算在临时兄弟目录完成，再独占创建目标目录并转移文件，清单最后提交。已有文件、空目录和非空目录都拒绝覆盖；分离、曲线覆盖不足或输入错误不生成完整包。普通转移失败会清理本次创建的文件；进程突然中断可能留下没有清单的部分目录，该目录不能视为完整结果，也不会被下次运行覆盖。计算使用临时输入快照，导出的结果包不附带原始采集文件，也不会自动上传。哈希用于检查文件一致性，不证明测量或材料有效。
 
 | 示例方案 | 刚度比 C | 最低夹紧力 | 最大名义应力 | 未修正均值的模型损伤 |
 |---|---:|---:|---:|---:|
@@ -214,6 +237,7 @@ moon test --target js
 python tests/test_cli.py
 python tests/test_input_config.py
 python tests/test_comparison.py
+python tests/test_bundle.py
 ```
 
 核心测试覆盖手算、力平衡、分离临界点、完整输入校验、公开记录的导出限制及 CSV。CLI 测试覆盖分离阻断、旧结果清除、输入路径保护与文件单位。Python 仅用于测试和配套示例。

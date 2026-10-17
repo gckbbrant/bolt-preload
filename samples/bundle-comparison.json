@@ -1,0 +1,9 @@
+{
+  "profile": "joint.json",
+  "loads": "sensor-loads.csv",
+  "input_config": "sensor-input.json",
+  "sn": "../../fatigue-spectrum/samples/sn.json",
+  "fatigue": "../../fatigue-spectrum",
+  "bundle": "../_build/portable-comparison",
+  "force_gain": -4
+}

@@ -36,3 +36,4 @@ jobs:
           python3 scripts/compare_joints.py --config samples/sensor-comparison.json --fatigue _build/fatigue-spectrum --sn _build/fatigue-spectrum/samples/sn.json --output _build/sensor-comparison.json
           python3 scripts/compare_joints.py --config samples/preset-comparison.json --fatigue _build/fatigue-spectrum --sn _build/fatigue-spectrum/samples/sn.json --output _build/preset-comparison.json
           FATIGUE_PROJECT=_build/fatigue-spectrum python3 tests/test_comparison.py
+          FATIGUE_PROJECT=_build/fatigue-spectrum python3 tests/test_bundle.py
